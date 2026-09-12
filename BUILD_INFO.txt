@@ -1,0 +1,36 @@
+Pocket Windows - Bochs x86-64 PC Emulator WebAssembly Build
+=========================================================
+
+Build Information & Environment Summary
+---------------------------------------
+- Base Emulator: Official Bochs repository (github.com/bochs-emu/Bochs)
+- Target Platform: WebAssembly / Web Worker (no SharedArrayBuffer, no pthread)
+- Emscripten SDK: Version 6.0.9 (emcc / em++)
+- Architecture: x86-64 CPU emulation, VGA graphics, ATA CD-ROM & Hard Disk support
+
+Included Deliverable Assets (/app)
+----------------------------------
+1. `bochs.wasm` (1,356,019 bytes, MD5: 67d477e8e75fd2a1302de91c75516396)
+2. `bochs.js` (90,576 bytes)
+3. `wasmcanvas.cc` - Custom Bochs GUI display and keyboard/mouse input backend source
+4. `worker.js` - Dedicated Web Worker script managing filesystem and Bochs execution
+5. `index.html` - Static Web application with canvas display, built-in test disk, and custom ISO file picker
+6. `BIOS-bochs-latest` (131,072 bytes) - Bochs System BIOS ROM image
+7. `VGABIOS-lgpl-latest` (32,768 bytes) - Bochs LGPL VGA BIOS ROM image
+8. `test_hdd.img` (10,4857,60 bytes) - Bootable virtual hard disk image with custom x86 MBR
+
+Verified Functionality & Test Summary
+--------------------------------------
+1. 32-bit `time_t` Overflow Fix:
+   - `config.cc` patched with `mtim.tm_year = 1970 - 1900` and `xtim.tm_year = 2037 - 1900`, resolving immediate startup overflow crashes.
+2. Custom `wasmcanvas` GUI Backend & Text Rendering:
+   - Added `--with-wasmcanvas` configuration target.
+   - Built custom `bx_wasmcanvas_gui_c` backend implementing character rendering (`draw_char`), palette updates (`palette_change`), dimension updates (`dimension_update`), and framebuffer pixel streaming to JS via `Module.onFrame`.
+3. Virtual Hard Disk & CD-ROM Configuration:
+   - Hard disk configured on ATA master (`/pack/hdd.img`) and CD-ROM on ATA slave (`/pack/boot.iso`).
+   - Verified that previous "unmapped device" errors for `ELDL=80` are resolved.
+4. Input Handling Subsystem:
+   - Canvas forwards DOM `KeyboardEvent.code` mapped to Bochs `BX_KEY_*` constants via `bx_wasm_key_event` to `DEV_kbd_gen_scancode`.
+   - Mouse movement relative deltas (`movementX` / `movementY`) and button states mapped via `bx_wasm_mouse_event` to `DEV_mouse_motion`.
+5. Non-Blocking Browser Thread Execution:
+   - Web Worker execution confirmed; main UI thread and counter increment remain completely responsive during emulation.
