@@ -1,3 +1,4 @@
+#define BX_WITH_WASMCANVAS 1
 /////////////////////////////////////////////////////////////////////////
 // $Id$
 /////////////////////////////////////////////////////////////////////////
@@ -68,6 +69,7 @@ void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned header_b
 {
   BX_INFO(("WASM Canvas GUI specific_init called"));
   headerbar_height = header_bar_y;
+  new_text_api = 1;
 }
 
 void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)

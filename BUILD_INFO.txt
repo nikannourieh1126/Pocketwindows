@@ -1,36 +1,50 @@
-Pocket Windows - Bochs x86-64 PC Emulator WebAssembly Build
-=========================================================
+=== Pocket Windows - Bochs x86-64 WebAssembly Emulator Build Info ===
+Build Target: Bochs x86-64 Emulator (Emscripten WebAssembly / Web Worker)
+Emscripten Compiler: 3.1.53 / em++
+Build Options: -O2 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s FORCE_FILESYSTEM=1 -s MODULARIZE=1 -s EXPORT_NAME="createBochsModule" -s ENVIRONMENT=worker
 
-Build Information & Environment Summary
----------------------------------------
-- Base Emulator: Official Bochs repository (github.com/bochs-emu/Bochs)
-- Target Platform: WebAssembly / Web Worker (no SharedArrayBuffer, no pthread)
-- Emscripten SDK: Version 6.0.9 (emcc / em++)
-- Architecture: x86-64 CPU emulation, VGA graphics, ATA CD-ROM & Hard Disk support
+--- Deliverable Files Summary ---
+File: bochs.wasm
+  Size: 1,358,541 bytes (1358541 bytes)
+  MD5: 7f0a94adb67110094450c5c47d850ea2
+  SHA256: d582c735168ae059d5541e5e107ea9f6c89f4c0d925792c35900e67df5dee856
 
-Included Deliverable Assets (/app)
-----------------------------------
-1. `bochs.wasm` (1,356,019 bytes, MD5: 67d477e8e75fd2a1302de91c75516396)
-2. `bochs.js` (90,576 bytes)
-3. `wasmcanvas.cc` - Custom Bochs GUI display and keyboard/mouse input backend source
-4. `worker.js` - Dedicated Web Worker script managing filesystem and Bochs execution
-5. `index.html` - Static Web application with canvas display, built-in test disk, and custom ISO file picker
-6. `BIOS-bochs-latest` (131,072 bytes) - Bochs System BIOS ROM image
-7. `VGABIOS-lgpl-latest` (32,768 bytes) - Bochs LGPL VGA BIOS ROM image
-8. `test_hdd.img` (10,4857,60 bytes) - Bootable virtual hard disk image with custom x86 MBR
+File: bochs.js
+  Size: 91,559 bytes (91559 bytes)
+  MD5: 0e8b9a192ca5bc41b2674843704ffdef
+  SHA256: c3098c2874267ab59923ff7b97f8ff630002a5aa5481d5547d7306e7f4600588
 
-Verified Functionality & Test Summary
---------------------------------------
-1. 32-bit `time_t` Overflow Fix:
-   - `config.cc` patched with `mtim.tm_year = 1970 - 1900` and `xtim.tm_year = 2037 - 1900`, resolving immediate startup overflow crashes.
-2. Custom `wasmcanvas` GUI Backend & Text Rendering:
-   - Added `--with-wasmcanvas` configuration target.
-   - Built custom `bx_wasmcanvas_gui_c` backend implementing character rendering (`draw_char`), palette updates (`palette_change`), dimension updates (`dimension_update`), and framebuffer pixel streaming to JS via `Module.onFrame`.
-3. Virtual Hard Disk & CD-ROM Configuration:
-   - Hard disk configured on ATA master (`/pack/hdd.img`) and CD-ROM on ATA slave (`/pack/boot.iso`).
-   - Verified that previous "unmapped device" errors for `ELDL=80` are resolved.
-4. Input Handling Subsystem:
-   - Canvas forwards DOM `KeyboardEvent.code` mapped to Bochs `BX_KEY_*` constants via `bx_wasm_key_event` to `DEV_kbd_gen_scancode`.
-   - Mouse movement relative deltas (`movementX` / `movementY`) and button states mapped via `bx_wasm_mouse_event` to `DEV_mouse_motion`.
-5. Non-Blocking Browser Thread Execution:
-   - Web Worker execution confirmed; main UI thread and counter increment remain completely responsive during emulation.
+File: wasmcanvas.cc
+  Size: 8,362 bytes (8362 bytes)
+  MD5: a661a1aa20d773f3b6f02df8465d6ccd
+  SHA256: 09e500f880316a4f25b09e3a162d091db033997894a28f6e65ad9cdb806280a1
+
+File: worker.js
+  Size: 5,379 bytes (5379 bytes)
+  MD5: 2ca867a05497fef1ff7e2e42deb1fb7a
+  SHA256: bae0dfe3aeb29e3bc56db6f6777104b2b9ab066de50203d76a139724d635729f
+
+File: index.html
+  Size: 9,249 bytes (9249 bytes)
+  MD5: 305aba0af68a7aaa65b65631efb7dfbf
+  SHA256: 6ebbb27c01e9ce2424687b2c91145d016681dfc3c53cb382048caa4edec4c1bb
+
+File: BIOS-bochs-latest
+  Size: 131,072 bytes (131072 bytes)
+  MD5: df0c783d560d9a32e879dbbefede5e09
+  SHA256: 530378cb25899f1063fb304d039edb33ea1c20ec784e65fed456233c07d9bf9a
+
+File: VGABIOS-lgpl-latest
+  Size: 32,768 bytes (32768 bytes)
+  MD5: 2702699195a979e7572841b25e7f36ae
+  SHA256: 157ee2e631c429114e48a8051c029ee79f1dc5adae59dd18178a6c6673c7cf37
+
+File: test_hdd.img
+  Size: 10,485,760 bytes (10485760 bytes)
+  MD5: 421b5d3850fa18cc197cd6dba75d745e
+  SHA256: 5367dbe12e1b1b7b492c5c19f1b5aea0297f143c3dc134b0eab7f72fb096f800
+
+File: bochsrc-wasm.txt
+  Size: 1,183 bytes (1183 bytes)
+  MD5: 58b2db4fbd33c6693c86613efd90fb69
+  SHA256: 4f04a351ba537c904c8090e888e526e043f95ae06e5f24c4c3e5ead1a5295025
