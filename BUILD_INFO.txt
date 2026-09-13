@@ -1,20 +1,21 @@
 === Pocket Windows - Bochs x86-64 WebAssembly Emulator Build Info ===
 Build Target: Bochs x86-64 Emulator (Emscripten WebAssembly / Web Worker)
 Emscripten Compiler: 3.1.53 / em++
-Build Options: -O3 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s FORCE_FILESYSTEM=1 -s MODULARIZE=1 -s EXPORT_NAME="createBochsModule" -s ENVIRONMENT=worker -s ASSERTIONS=0
-Bochs Speedup Flags: --enable-repeat-speedups --enable-fast-function-calls --enable-handlers-chaining --enable-trace-linking
-Measured Boot Time: 1.713 seconds to initial rendered frame
+Build Options: -O3 -s STACK_SIZE=8388608 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s FORCE_FILESYSTEM=1 -s MODULARIZE=1 -s EXPORT_NAME="createBochsModule" -s ENVIRONMENT=worker -s ASSERTIONS=0
+Bochs Speedup Flags: --enable-repeat-speedups --enable-fast-function-calls
+Stack Fix: Removed --enable-handlers-chaining and increased WASM STACK_SIZE to 8MB to prevent C call-stack recursion overflow in WebAssembly runtime.
+Measured Boot Time: 0.782 seconds to initial rendered frame
 
 --- Deliverable Files Summary ---
 File: bochs.wasm
-  Size: 1,507,320 bytes (1507320 bytes)
-  MD5: 71051a35a06567e637172b7dde1fc9d6
-  SHA256: 6bbb41737b6a47a96a17f6f8c19b129b1ce3de187381e44a98c3524cb714fbda
+  Size: 1,397,721 bytes (1397721 bytes)
+  MD5: 30d5086fff7ec958a39dcb9154099ec6
+  SHA256: e91776e7c3df71fdda28b6bc4e7aad5cbf0939696dabdd7922f236c314d03719
 
 File: bochs.js
   Size: 96,142 bytes (96142 bytes)
-  MD5: ab0d5a6aaeed65073d250a74af16e277
-  SHA256: 736c3f6d0e732a3c57ec41620396555625ada60b760e73f2ec2ad163b7b08293
+  MD5: b057942130321a7cceee6a4f89dff771
+  SHA256: 2ca2a3057c6ee9502a29a9f5a8caaf46ad08352267c2b88a28ae418e71573d82
 
 File: wasmcanvas.cc
   Size: 8,000 bytes (8000 bytes)
@@ -22,14 +23,14 @@ File: wasmcanvas.cc
   SHA256: adecc85765d2d81d3a486a023df1228a9c7280a4911ad89ccfa35d70832686d5
 
 File: worker.js
-  Size: 5,379 bytes (5379 bytes)
-  MD5: 2ca867a05497fef1ff7e2e42deb1fb7a
-  SHA256: bae0dfe3aeb29e3bc56db6f6777104b2b9ab066de50203d76a139724d635729f
+  Size: 4,741 bytes (4741 bytes)
+  MD5: ca855d44eca34fd985a1765ed8be98fa
+  SHA256: ccc0b80ed53ff43d8f0014c2c1c7bdb956a51b22b499dd7ca7fd1b5ee03ad199
 
 File: index.html
-  Size: 10,371 bytes (10371 bytes)
-  MD5: e7e50e2a3ec6507708f84fc9efb0ea71
-  SHA256: d11012b0f273127b05fcd205a17a30a3e218409c814f59e0dd8e47059a338733
+  Size: 10,071 bytes (10071 bytes)
+  MD5: e2ff6bf63650ebf442dadace574e00cf
+  SHA256: 5577452e4d2d1f5397f9a5e3f9293fb9d85e4b8847ae09011c68a446601bcc75
 
 File: BIOS-bochs-latest
   Size: 131,072 bytes (131072 bytes)
@@ -55,3 +56,13 @@ File: bochsrc-wasm.txt
   Size: 1,183 bytes (1183 bytes)
   MD5: 58b2db4fbd33c6693c86613efd90fb69
   SHA256: 4f04a351ba537c904c8090e888e526e043f95ae06e5f24c4c3e5ead1a5295025
+
+File: winxp_iso_setup_integer_scale.png
+  Size: 93,707 bytes (93707 bytes)
+  MD5: ef93077d74c82d846ca60afa33060dd6
+  SHA256: 0cfc97aced54c4898c94f8d3b06994f6690cde00e374d58ca12986ec947491b6
+
+File: winxp_iso_after_enter_key.png
+  Size: 93,707 bytes (93707 bytes)
+  MD5: ef93077d74c82d846ca60afa33060dd6
+  SHA256: 0cfc97aced54c4898c94f8d3b06994f6690cde00e374d58ca12986ec947491b6

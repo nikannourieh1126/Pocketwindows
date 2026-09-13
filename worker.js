@@ -3,7 +3,6 @@
 
 let bochsModule = null;
 
-// Handle messages from main thread
 self.onmessage = function(e) {
     const msg = e.data;
     if (!msg || !msg.type) return;
@@ -47,10 +46,8 @@ async function startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes) {
     self.postMessage({ type: 'log', text: '[Worker] Starting Bochs initialization...', level: 'info' });
     
     try {
-        // Import the compiled Bochs WASM glue script
         importScripts('./bochs.js');
         
-        // Create Bochs module instance with noInitialRun: true to prevent auto-executing main() on load without arguments
         bochsModule = await createBochsModule({
             noInitialRun: true,
             onFrame: handleFrame,
@@ -62,34 +59,27 @@ async function startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes) {
         console.log('[Worker] Bochs WebAssembly module created successfully');
         self.postMessage({ type: 'log', text: '[Worker] Bochs WebAssembly module created successfully', level: 'info' });
         
-        // Set up virtual filesystem
         const FS = bochsModule.FS;
         
         try {
             FS.mkdir('/pack');
         } catch (e) {
-            // Ignored if already exists
         }
 
-        // Write BIOS and VGABIOS files
         FS.writeFile('/pack/BIOS-bochs-latest', new Uint8Array(biosBytes));
         FS.writeFile('/pack/VGABIOS-lgpl-latest', new Uint8Array(vgabiosBytes));
         
-        // Write Hard Disk image
         const hddArray = new Uint8Array(hddBytes);
         FS.writeFile('/pack/hdd.img', hddArray);
         
-        // Compute geometry dynamically for flat hard disk image
         const totalSectors = Math.floor(hddArray.length / 512) || 1;
         const heads = 16;
         const spt = 63;
         const cylinders = Math.max(1, Math.floor(totalSectors / (heads * spt)));
 
-        // Write ISO / CD-ROM image
         const isoArray = new Uint8Array(isoBytes);
         FS.writeFile('/pack/boot.iso', isoArray);
 
-        // Generate bochsrc.txt matching standard Bochs directives
         const bochsrc = `
 # Bochs WASM Configuration
 cpu: count=1, reset_on_triple_fault=1, ignore_bad_msrs=1
@@ -114,7 +104,6 @@ boot: disk, cdrom
         console.log('[Worker] bochsrc.txt written, invoking callMain...');
         self.postMessage({ type: 'log', text: '[Worker] Invoking Bochs main loop...', level: 'info' });
 
-        // Start Bochs main loop with arguments (-q must come first so Bochs bypasses configuration menu)
         bochsModule.callMain(['-q', '-f', '/pack/bochsrc.txt']);
         
     } catch (err) {
