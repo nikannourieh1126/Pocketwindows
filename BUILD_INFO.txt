@@ -3,12 +3,13 @@ Build Target: Bochs x86-64 Emulator (Emscripten WebAssembly / Web Worker)
 Emscripten Compiler: 3.1.53 / em++
 Build Options: -O3 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s FORCE_FILESYSTEM=1 -s MODULARIZE=1 -s EXPORT_NAME="createBochsModule" -s ENVIRONMENT=worker -s ASSERTIONS=0
 Bochs Speedup Flags: --enable-repeat-speedups --enable-fast-function-calls --enable-handlers-chaining --enable-trace-linking
+Measured Boot Time: 1.713 seconds to initial rendered frame
 
 --- Deliverable Files Summary ---
 File: bochs.wasm
   Size: 1,507,320 bytes (1507320 bytes)
-  MD5: a9b0b177091d1fb6772bd0751276f18f
-  SHA256: 134f57be93905970c9cb5966d6fab79d84a5bece5db99a07ccf74cb576419d6b
+  MD5: 71051a35a06567e637172b7dde1fc9d6
+  SHA256: 6bbb41737b6a47a96a17f6f8c19b129b1ce3de187381e44a98c3524cb714fbda
 
 File: bochs.js
   Size: 96,142 bytes (96142 bytes)
@@ -27,8 +28,8 @@ File: worker.js
 
 File: index.html
   Size: 10,371 bytes (10371 bytes)
-  MD5: efbe64d77044ef848bb21d12b8f811ac
-  SHA256: e54db7eaa4067d729b1a5afdc1dcd8fa960a96145eda1ef344386e3b34444a53
+  MD5: e7e50e2a3ec6507708f84fc9efb0ea71
+  SHA256: d11012b0f273127b05fcd205a17a30a3e218409c814f59e0dd8e47059a338733
 
 File: BIOS-bochs-latest
   Size: 131,072 bytes (131072 bytes)
@@ -44,6 +45,11 @@ File: test_hdd.img
   Size: 10,485,760 bytes (10485760 bytes)
   MD5: fe5525a9bba53680f2395251fb125be3
   SHA256: 4275923d7d6a151fbae34fadce66d5e453b9e5c99f1e461e78a2ef08b6f9f850
+
+File: test_boot.iso
+  Size: 49,149 bytes (49149 bytes)
+  MD5: 92ee5c5e654924984a556e725c286228
+  SHA256: 7522aab745bf38f9202ca506502a4d1d97e6ad1a0133dd09d80c1a428f02d489
 
 File: bochsrc-wasm.txt
   Size: 1,183 bytes (1183 bytes)
