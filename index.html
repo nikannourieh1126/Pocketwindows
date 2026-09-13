@@ -24,6 +24,8 @@
             display: flex;
             gap: 12px;
             align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         button, label.btn {
             background-color: #89b4fa;
@@ -47,16 +49,26 @@
             background-color: #000;
             margin-top: 10px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            padding: 4px;
+            padding: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            max-width: 95vw;
+            overflow: hidden;
         }
         canvas {
             display: block;
             image-rendering: pixelated;
+            image-rendering: crisp-edges;
             outline: none;
+            max-width: 100%;
+            height: auto;
+            object-fit: contain;
         }
         #log-output {
             margin-top: 20px;
             width: 720px;
+            max-width: 95vw;
             height: 150px;
             background-color: #11111b;
             border: 1px solid #45475a;
@@ -86,7 +98,7 @@
 
     <script>
         const canvas = document.getElementById('display');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const statusEl = document.getElementById('status');
         const logEl = document.getElementById('log-output');
 
@@ -95,7 +107,7 @@
         // DOM KeyboardEvent.code to Bochs BX_KEY_* constant mapping
         const DOM_TO_BX_KEY = {
             "ControlLeft": 0, "ShiftLeft": 1,
-            "F1": 2, "F2": 3, "F3": 4, "F4": 5, "F5": 6, "F6": 7, "F7": 8, "F8": 9, "F9": 10, "F10": 11, "F11": 12, "F12": 13,
+            "F1": 2, "F2": 3, "F3": 4, "F4": 5, "F5": 6, "F7": 8, "F8": 9, "F9": 10, "F10": 11, "F11": 12, "F12": 13,
             "ControlRight": 14, "ShiftRight": 15, "CapsLock": 16, "NumLock": 17, "AltLeft": 18, "AltRight": 19,
             "KeyA": 20, "KeyB": 21, "KeyC": 22, "KeyD": 23, "KeyE": 24, "KeyF": 25, "KeyG": 26, "KeyH": 27, "KeyI": 28,
             "KeyJ": 29, "KeyK": 30, "KeyL": 31, "KeyM": 32, "KeyN": 33, "KeyO": 34, "KeyP": 35, "KeyQ": 36, "KeyR": 37,
@@ -109,6 +121,21 @@
             "NumpadEnter": 101, "NumpadMultiply": 102, "NumpadDivide": 103,
             "MetaLeft": 104, "MetaRight": 105, "ContextMenu": 106
         };
+
+        function updateCanvasDisplaySize() {
+            // Apply integer multiplier scaling based on available width
+            const containerWidth = document.getElementById('canvas-container').clientWidth - 16;
+            const nativeWidth = canvas.width || 720;
+            const nativeHeight = canvas.height || 400;
+
+            let scale = Math.floor(containerWidth / nativeWidth);
+            if (scale < 1) scale = 1;
+
+            canvas.style.width = `${nativeWidth * scale}px`;
+            canvas.style.height = `${nativeHeight * scale}px`;
+        }
+
+        window.addEventListener('resize', updateCanvasDisplaySize);
 
         function log(text, isErr = false) {
             const div = document.createElement('div');
@@ -158,6 +185,7 @@
                     if (msg.type === 'dimension') {
                         canvas.width = msg.width;
                         canvas.height = msg.height;
+                        updateCanvasDisplaySize();
                         log(`[Host] Canvas resized to ${msg.width}x${msg.height}`);
                     } else if (msg.type === 'frame') {
                         if (msg.imageData) {
@@ -235,6 +263,8 @@
             const isoBuffer = await file.arrayBuffer();
             await startEmulator(isoBuffer);
         });
+
+        updateCanvasDisplaySize();
     </script>
 </body>
 </html>

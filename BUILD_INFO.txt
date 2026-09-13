@@ -1,23 +1,24 @@
 === Pocket Windows - Bochs x86-64 WebAssembly Emulator Build Info ===
 Build Target: Bochs x86-64 Emulator (Emscripten WebAssembly / Web Worker)
 Emscripten Compiler: 3.1.53 / em++
-Build Options: -O2 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s FORCE_FILESYSTEM=1 -s MODULARIZE=1 -s EXPORT_NAME="createBochsModule" -s ENVIRONMENT=worker
+Build Options: -O3 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s FORCE_FILESYSTEM=1 -s MODULARIZE=1 -s EXPORT_NAME="createBochsModule" -s ENVIRONMENT=worker -s ASSERTIONS=0
+Bochs Speedup Flags: --enable-repeat-speedups --enable-fast-function-calls --enable-handlers-chaining --enable-trace-linking
 
 --- Deliverable Files Summary ---
 File: bochs.wasm
-  Size: 1,358,541 bytes (1358541 bytes)
-  MD5: 7f0a94adb67110094450c5c47d850ea2
-  SHA256: d582c735168ae059d5541e5e107ea9f6c89f4c0d925792c35900e67df5dee856
+  Size: 1,507,320 bytes (1507320 bytes)
+  MD5: a9b0b177091d1fb6772bd0751276f18f
+  SHA256: 134f57be93905970c9cb5966d6fab79d84a5bece5db99a07ccf74cb576419d6b
 
 File: bochs.js
-  Size: 91,559 bytes (91559 bytes)
-  MD5: 0e8b9a192ca5bc41b2674843704ffdef
-  SHA256: c3098c2874267ab59923ff7b97f8ff630002a5aa5481d5547d7306e7f4600588
+  Size: 96,142 bytes (96142 bytes)
+  MD5: ab0d5a6aaeed65073d250a74af16e277
+  SHA256: 736c3f6d0e732a3c57ec41620396555625ada60b760e73f2ec2ad163b7b08293
 
 File: wasmcanvas.cc
-  Size: 8,362 bytes (8362 bytes)
-  MD5: a661a1aa20d773f3b6f02df8465d6ccd
-  SHA256: 09e500f880316a4f25b09e3a162d091db033997894a28f6e65ad9cdb806280a1
+  Size: 8,000 bytes (8000 bytes)
+  MD5: b0306d2d395a999692764161e0d3c881
+  SHA256: adecc85765d2d81d3a486a023df1228a9c7280a4911ad89ccfa35d70832686d5
 
 File: worker.js
   Size: 5,379 bytes (5379 bytes)
@@ -25,9 +26,9 @@ File: worker.js
   SHA256: bae0dfe3aeb29e3bc56db6f6777104b2b9ab066de50203d76a139724d635729f
 
 File: index.html
-  Size: 9,249 bytes (9249 bytes)
-  MD5: 305aba0af68a7aaa65b65631efb7dfbf
-  SHA256: 6ebbb27c01e9ce2424687b2c91145d016681dfc3c53cb382048caa4edec4c1bb
+  Size: 10,371 bytes (10371 bytes)
+  MD5: efbe64d77044ef848bb21d12b8f811ac
+  SHA256: e54db7eaa4067d729b1a5afdc1dcd8fa960a96145eda1ef344386e3b34444a53
 
 File: BIOS-bochs-latest
   Size: 131,072 bytes (131072 bytes)
@@ -41,8 +42,8 @@ File: VGABIOS-lgpl-latest
 
 File: test_hdd.img
   Size: 10,485,760 bytes (10485760 bytes)
-  MD5: 421b5d3850fa18cc197cd6dba75d745e
-  SHA256: 5367dbe12e1b1b7b492c5c19f1b5aea0297f143c3dc134b0eab7f72fb096f800
+  MD5: fe5525a9bba53680f2395251fb125be3
+  SHA256: 4275923d7d6a151fbae34fadce66d5e453b9e5c99f1e461e78a2ef08b6f9f850
 
 File: bochsrc-wasm.txt
   Size: 1,183 bytes (1183 bytes)

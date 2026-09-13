@@ -1,4 +1,3 @@
-#define BX_WITH_WASMCANVAS 1
 /////////////////////////////////////////////////////////////////////////
 // $Id$
 /////////////////////////////////////////////////////////////////////////
@@ -19,18 +18,14 @@
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
+#define BX_WITH_WASMCANVAS 1
 #define _MULTI_THREAD
-
-// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
-// platforms that require a special tag on exported symbols, BX_PLUGGABLE
-// is used to know when we are exporting symbols and when we are importing.
 #define BX_PLUGGABLE
 
 #include "bochs.h"
 #include "param_names.h"
 #include "keymap.h"
 #include "iodev.h"
-#if BX_WITH_WASMCANVAS
 
 #include <stdlib.h>
 #include <emscripten/emscripten.h>
@@ -47,8 +42,6 @@ public:
                          bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs, bool font2);
 };
 
-// declare one instance of the gui object and call macro to insert the
-// plugin code
 static bx_wasmcanvas_gui_c *theGui = NULL;
 IMPLEMENT_GUI_PLUGIN_CODE(wasmcanvas)
 
@@ -311,5 +304,3 @@ EMSCRIPTEN_KEEPALIVE void bx_wasm_mouse_event(int x, int y, int z, int button_st
   DEV_mouse_motion(x, y, z, button_state, abs_mode);
 }
 }
-
-#endif // BX_WITH_WASMCANVAS
