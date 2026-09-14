@@ -59,6 +59,43 @@ static Bit8u* framebuffer = NULL;
 static unsigned headerbar_height = 0;
 static Uint32 wasm_palette[256];
 static bool frame_dirty = false;
+static bool mic_active = false;
+
+// C-linkage WASM export helpers for keyboard & mouse input
+extern "C" {
+  EMSCRIPTEN_KEEPALIVE
+  void bx_wasm_key_event(Bit32u key_code, bool is_press) {
+    DEV_kbd_gen_scancode(key_code, !is_press);
+  }
+
+  EMSCRIPTEN_KEEPALIVE
+  void bx_wasm_mouse_event(int delta_x, int delta_y, int buttons) {
+    DEV_mouse_motion(delta_x, delta_y, 0, buttons, 0);
+  }
+
+  EMSCRIPTEN_KEEPALIVE
+  void bx_wasm_audio_output(int16_t *pcm_data, int sample_count) {
+    if (!pcm_data || sample_count <= 0) return;
+    EM_ASM({
+      if (Module.onAudioOutput) {
+        var len = $1 * 2;
+        var audioBytes = Module.HEAPU8.subarray($0, $0 + len);
+        Module.onAudioOutput(audioBytes);
+      }
+    }, (unsigned)pcm_data, sample_count);
+  }
+
+  EMSCRIPTEN_KEEPALIVE
+  void bx_wasm_request_mic(bool enable) {
+    if (mic_active == enable) return;
+    mic_active = enable;
+    EM_ASM({
+      if (Module.onRequestMic) {
+        Module.onRequestMic($0);
+      }
+    }, enable ? 1 : 0);
+  }
+}
 
 bx_wasmcanvas_gui_c::bx_wasmcanvas_gui_c()
 {
@@ -67,11 +104,10 @@ bx_wasmcanvas_gui_c::bx_wasmcanvas_gui_c()
 
 void bx_wasmcanvas_gui_c::init(unsigned xres, unsigned yres)
 {
-  BX_INFO(("WASM Canvas GUI initialized (optimized execution pipeline)"));
+  BX_INFO(("WASM Canvas GUI initialized with Sound & Mic bridge"));
   res_x = xres;
   res_y = yres;
   
-  // Allocate framebuffer: 4 bytes per pixel (RGBA)
   if (framebuffer) free(framebuffer);
   framebuffer = (Bit8u*)malloc(xres * yres * 4);
   if (!framebuffer) {

@@ -2,9 +2,6 @@
 // Runs Bochs x86-64 emulator in a Web Worker (single-threaded, no SharedArrayBuffer)
 
 let bochsModule = null;
-let canvas = null;
-let ctx = null;
-let animationId = null;
 
 // Hard disk configuration
 const HDD_SIZE_MB = 2048; // Default to 2GB to avoid browser memory issues
@@ -20,7 +17,6 @@ self.onmessage = function(e) {
     const msg = e.data;
     
     if (msg.type === 'init') {
-        // Initialize with transferred ISO, HDD, BIOS and VGABIOS data
         console.log('[Worker] Received init message');
 
         const isoBytes = msg.isoBytes;
@@ -28,95 +24,66 @@ self.onmessage = function(e) {
         const biosBytes = msg.biosBytes;
         const vgabiosBytes = msg.vgabiosBytes;
         
-        if (!isoBytes) {
-            console.error('[Worker] No ISO bytes received!');
+        if (!isoBytes || !hddBytes || !biosBytes || !vgabiosBytes) {
+            console.error('[Worker] Missing binary payload files for initialization!');
             return;
         }
 
-        if (!hddBytes) {
-            console.error('[Worker] No HDD bytes received!');
-            return;
-        }
-
-        if (!biosBytes || !vgabiosBytes) {
-            console.error('[Worker] Missing biosBytes/vgabiosBytes! Bochs cannot start without them.');
-            return;
-        }
-
-        console.log(`[Worker] ISO size: ${isoBytes.byteLength} bytes`);
-        console.log(`[Worker] HDD size: ${hddBytes.byteLength} bytes`);
-        console.log(`[Worker] BIOS size: ${biosBytes.byteLength} bytes`);
-        console.log(`[Worker] VGABIOS size: ${vgabiosBytes.byteLength} bytes`);
-
-        // Start Bochs with the images
         startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes);
     } else if (msg.type === 'keydown') {
-        if (bochsModule && bochsModule.onKeyDown) {
-            bochsModule.onKeyDown(msg.keyCode, msg.scancode);
+        if (bochsModule && bochsModule._bx_wasm_key_event) {
+            bochsModule._bx_wasm_key_event(msg.scancode, true);
         }
     } else if (msg.type === 'keyup') {
-        if (bochsModule && bochsModule.onKeyUp) {
-            bochsModule.onKeyUp(msg.keyCode, msg.scancode);
+        if (bochsModule && bochsModule._bx_wasm_key_event) {
+            bochsModule._bx_wasm_key_event(msg.scancode, false);
         }
     } else if (msg.type === 'mousemove') {
-        if (bochsModule && bochsModule.onMouseMove) {
-            bochsModule.onMouseMove(msg.x, msg.y, msg.buttons);
+        if (bochsModule && bochsModule._bx_wasm_mouse_event) {
+            bochsModule._bx_wasm_mouse_event(msg.deltaX || 0, msg.deltaY || 0, msg.buttons || 0);
         }
-    } else if (msg.type === 'mousedown') {
-        if (bochsModule && bochsModule.onMouseDown) {
-            bochsModule.onMouseDown(msg.button);
-        }
-    } else if (msg.type === 'mouseup') {
-        if (bochsModule && bochsModule.onMouseUp) {
-            bochsModule.onMouseUp(msg.button);
+    } else if (msg.type === 'mic_data') {
+        // Microphone PCM audio chunks received from main thread getUserMedia() stream
+        if (bochsModule && bochsModule._bx_wasm_mic_input && msg.pcmData) {
+            const ptr = bochsModule._malloc(msg.pcmData.byteLength);
+            bochsModule.HEAPU8.set(new Uint8Array(msg.pcmData), ptr);
+            bochsModule._bx_wasm_mic_input(ptr, msg.pcmData.byteLength);
+            bochsModule._free(ptr);
         }
     }
 };
 
 async function startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes) {
-    console.log('[Worker] Starting Bochs...');
+    console.log('[Worker] Starting Bochs with Audio & Microphone bridges...');
     
     try {
-        // Import the Bochs module
         importScripts('./bochs.js');
         
-        // Create Bochs module instance
         bochsModule = await createBochsModule({
             onFrame: handleFrame,
             onDimensionChange: handleDimensionChange,
+            onAudioOutput: handleAudioOutput,
+            onRequestMic: handleRequestMic,
             print: handlePrint,
             printErr: handlePrintErr
         });
         
         console.log('[Worker] Bochs module created');
         
-        // Set up virtual filesystem
         const FS = bochsModule.FS;
-        
-        // Create /pack directory
         FS.mkdir('/pack');
 
-        // Write BIOS and VGABIOS files (required — bochsrc references them by these exact names)
-        console.log('[Worker] Writing BIOS-bochs-latest...');
         FS.writeFile('/pack/BIOS-bochs-latest', new Uint8Array(biosBytes));
-        console.log('[Worker] Writing VGABIOS-lgpl-latest...');
         FS.writeFile('/pack/VGABIOS-lgpl-latest', new Uint8Array(vgabiosBytes));
         
-        // Write the hard disk image
-        console.log('[Worker] Writing HDD image to /pack/hdd.img...');
         const hddArray = new Uint8Array(hddBytes);
         FS.writeFile('/pack/hdd.img', hddArray);
-        console.log(`[Worker] HDD image written: ${hddArray.length} bytes`);
         
-        // Write the ISO image
-        console.log('[Worker] Writing ISO image to /pack/boot.iso...');
         const isoArray = new Uint8Array(isoBytes);
         FS.writeFile('/pack/boot.iso', isoArray);
-        console.log(`[Worker] ISO image written: ${isoArray.length} bytes`);
 
-        // Create optimized bochsrc configuration
         const bochsrc = `
-# Bochs WASM Configuration - Optimized Execution Engine
+# Bochs WASM Configuration - Optimized Execution Engine with SB16 Audio
 cpu: count=1, ips=15000000, quantum=16, reset_on_triple_fault=1, ignore_bad_msrs=1
 clock: sync=none, time0=local
 megs: 512
@@ -126,6 +93,8 @@ vgaromimage: file=/pack/VGABIOS-lgpl-latest
 
 pci: enabled=1, chipset=i440fx
 vga: extension=vbe, update_freq=60
+
+sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
 
 display_library: wasmcanvas
 
@@ -142,10 +111,7 @@ boot: cdrom
         FS.writeFile('/pack/bochsrc.txt', new TextEncoder().encode(bochsrc));
         console.log('[Worker] Bochsrc written');
 
-        // Start Bochs with our config
-        console.log('[Worker] Calling callMain with bochsrc...');
         bochsModule.callMain(['-f', '/pack/bochsrc.txt', '-q']);
-        console.log('[Worker] callMain returned');
         
     } catch (err) {
         console.error('[Worker] Error starting Bochs:', err);
@@ -171,6 +137,23 @@ function handleFrame(data, width, height) {
             height: height
         });
     }
+}
+
+function handleAudioOutput(pcmBytes) {
+    if (!pcmBytes) return;
+    const copy = new Uint8Array(pcmBytes);
+    self.postMessage({
+        type: 'audio',
+        samples: copy.buffer
+    }, [copy.buffer]);
+}
+
+function handleRequestMic(enable) {
+    console.log(`[Worker] Guest requested microphone: ${enable}`);
+    self.postMessage({
+        type: 'request_mic',
+        enable: enable
+    });
 }
 
 function handleDimensionChange(width, height) {

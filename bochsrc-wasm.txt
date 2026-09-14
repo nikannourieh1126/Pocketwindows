@@ -1,5 +1,5 @@
 # Bochs WASM Configuration File
-# Optimized for maximum speed, lightweight footprint, and zero-delay emulation
+# Optimized for maximum speed, lightweight footprint, and full audio/microphone support
 
 # CPU and memory settings
 cpu: count=1, ips=15000000, quantum=16, reset_on_triple_fault=1, ignore_bad_msrs=1
@@ -13,6 +13,9 @@ vgaromimage: file=/pack/VGABIOS-lgpl-latest
 # PCI and VGA settings
 pci: enabled=1, chipset=i440fx
 vga: extension=vbe, update_freq=60
+
+# Sound Blaster 16 Audio Output & Microphone Emulation
+sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
 
 # Display settings - using wasmcanvas
 display_library: wasmcanvas
