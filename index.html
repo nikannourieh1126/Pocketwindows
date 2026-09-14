@@ -27,7 +27,7 @@
             flex-wrap: wrap;
             justify-content: center;
         }
-        button, label.btn {
+        button, label.btn, select {
             background-color: #89b4fa;
             color: #11111b;
             padding: 8px 16px;
@@ -36,6 +36,12 @@
             font-weight: bold;
             cursor: pointer;
             display: inline-block;
+            font-size: 14px;
+        }
+        select {
+            background-color: #313244;
+            color: #cdd6f4;
+            border: 1px solid #45475a;
         }
         button:hover, label.btn:hover {
             background-color: #b4befe;
@@ -81,11 +87,29 @@
             overflow-y: scroll;
             color: #a6adc8;
         }
+        .info-panel {
+            font-size: 13px;
+            color: #a6adc8;
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
     <h1>Pocket Windows PC Emulator</h1>
+
+    <div class="info-panel" id="hardware-info">
+        Hardware Auto-Detection: CPU Cores = Detecting... | GPU Acceleration = Auto
+    </div>
+
     <div class="controls">
+        <label for="ram-select">VM Memory:</label>
+        <select id="ram-select">
+            <option value="256">256 MB</option>
+            <option value="512">512 MB</option>
+            <option value="1024" selected>1024 MB (Recommended)</option>
+            <option value="2048">2048 MB</option>
+        </select>
+
         <button id="run-built-in">Run Built-in Test Disk</button>
         <label for="iso-file" class="btn">Choose Custom ISO File</label>
         <input type="file" id="iso-file" accept=".iso,.img,.bin">
@@ -103,12 +127,29 @@
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const statusEl = document.getElementById('status');
         const logEl = document.getElementById('log-output');
+        const ramSelect = document.getElementById('ram-select');
+        const hwInfoEl = document.getElementById('hardware-info');
 
         let worker = null;
 
+        // Auto-detect CPU logical cores and GPU canvas renderer
+        const detectedCores = navigator.hardwareConcurrency || 4;
+        let gpuRenderer = 'WebGL / Canvas 2D';
+        try {
+            const gl = document.createElement('canvas').getContext('webgl');
+            if (gl) {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    gpuRenderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                }
+            }
+        } catch (e) {}
+
+        hwInfoEl.textContent = `Hardware Auto-Detection: Logical Cores = ${detectedCores} | GPU = ${gpuRenderer}`;
+
         const DOM_TO_BX_KEY = {
             "ControlLeft": 0, "ShiftLeft": 1,
-            "F1": 2, "F2": 3, "F3": 4, "F5": 6, "F6": 7, "F7": 8, "F8": 9, "F9": 10, "F10": 11, "F11": 12, "F12": 13,
+            "F1": 2, "F2": 3, "F3": 4, "F5": 6, "F6": 7, "F7": 8, "F8": 9, "F10": 11, "F11": 12, "F12": 13,
             "ControlRight": 14, "ShiftRight": 15, "CapsLock": 16, "NumLock": 17, "AltLeft": 18, "AltRight": 19,
             "KeyA": 20, "KeyB": 21, "KeyC": 22, "KeyD": 23, "KeyE": 24, "KeyF": 25, "KeyG": 26, "KeyH": 27, "KeyI": 28,
             "KeyJ": 29, "KeyK": 30, "KeyL": 31, "KeyM": 32, "KeyN": 33, "KeyO": 34, "KeyP": 35, "KeyQ": 36, "KeyR": 37,
@@ -142,8 +183,9 @@
                 worker.terminate();
             }
 
+            const selectedRam = parseInt(ramSelect.value, 10) || 1024;
             statusEl.textContent = 'Status: Loading ROMs and Disk Images...';
-            log('[Host] Loading BIOS and VGABIOS...');
+            log(`[Host] Allocating ${selectedRam} MB RAM for VM (Auto-Detected Cores: ${detectedCores})...`);
 
             try {
                 const [biosBytes, vgabiosBytes] = await Promise.all([
@@ -184,24 +226,22 @@
                     }
                 };
 
-                // Check if isoInput is a File handle (zero-copy) or ArrayBuffer
+                const initPayload = {
+                    type: 'init',
+                    ramMegs: selectedRam,
+                    cpuCores: detectedCores,
+                    hddBytes: hddBytes,
+                    biosBytes: biosBytes,
+                    vgabiosBytes: vgabiosBytes
+                };
+
                 if (isoInput instanceof File || isoInput instanceof Blob) {
                     log(`[Host] Mounting ISO via zero-copy stream handle (${(isoInput.size / (1024*1024)).toFixed(1)} MB)...`);
-                    worker.postMessage({
-                        type: 'init',
-                        isoFile: isoInput,
-                        hddBytes: hddBytes,
-                        biosBytes: biosBytes,
-                        vgabiosBytes: vgabiosBytes
-                    }, [hddBytes, biosBytes, vgabiosBytes]);
+                    initPayload.isoFile = isoInput;
+                    worker.postMessage(initPayload, [hddBytes, biosBytes, vgabiosBytes]);
                 } else {
-                    worker.postMessage({
-                        type: 'init',
-                        isoBytes: isoInput,
-                        hddBytes: hddBytes,
-                        biosBytes: biosBytes,
-                        vgabiosBytes: vgabiosBytes
-                    }, [isoInput, hddBytes, biosBytes, vgabiosBytes]);
+                    initPayload.isoBytes = isoInput;
+                    worker.postMessage(initPayload, [isoInput, hddBytes, biosBytes, vgabiosBytes]);
                 }
 
             } catch (err) {
@@ -255,7 +295,6 @@
             if (!file) return;
             log(`[Host] Selected ISO: ${file.name} (${(file.size / (1024*1024)).toFixed(1)} MB)`);
             statusEl.textContent = 'Status: Initializing zero-copy ISO mount...';
-            // Pass the raw File object directly without loading entire buffer into RAM!
             await startEmulator(file);
         });
     </script>

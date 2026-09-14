@@ -23,14 +23,14 @@ File: wasmcanvas.cc
   SHA256: adecc85765d2d81d3a486a023df1228a9c7280a4911ad89ccfa35d70832686d5
 
 File: worker.js
-  Size: 8,113 bytes (8113 bytes)
-  MD5: 253eac31c6c903706b2ae42833c3476a
-  SHA256: bc9d7a27ab50bc0528225b946418d640c74fb7b8ce69573221ff7c42ec8f645e
+  Size: 7,504 bytes (7504 bytes)
+  MD5: a50ba01141b40fd7ab53c1447b12aac7
+  SHA256: 02fb8548e5240a2c8335e67a8d3cc5b2bba6d54f5600ce709cb7580d52b6bd0b
 
 File: index.html
-  Size: 10,227 bytes (10227 bytes)
-  MD5: f4099a3281f7ea4f90edc73a910a830b
-  SHA256: 40e1592ac177e5ae5468509651b0812f10ba6fe9a510c045ba3642688b386290
+  Size: 11,673 bytes (11673 bytes)
+  MD5: f58424ab84045e4587d764f3470a6da2
+  SHA256: 3855524cacff60afa63b3fb5ae241e939c314ee867e0ed4dbd1d15f0cf0768b7
 
 File: BIOS-bochs-latest
   Size: 131,072 bytes (131072 bytes)
@@ -49,8 +49,8 @@ File: test_hdd.img
 
 File: test_boot.iso
   Size: 49,149 bytes (49149 bytes)
-  MD5: 92ee5c5e654924984a556e725c286228
-  SHA256: 7522aab745bf38f9202ca506502a4d1d97e6ad1a0133dd09d80c1a428f02d489
+  MD5: 3c7dae4ea208174c88a593f74ecdaac4
+  SHA256: b2c5ad3b715e102864cf083f0c11782d0e61b425cbbcc8470b21c11dabbc0636
 
 File: bochsrc-wasm.txt
   Size: 857 bytes (857 bytes)
@@ -58,11 +58,11 @@ File: bochsrc-wasm.txt
   SHA256: 5c2070a2bc5b64adbec548fa1c649715cef10c5287026f26baa9658feb4722e9
 
 File: winxp_iso_setup_integer_scale.png
-  Size: 93,707 bytes (93707 bytes)
-  MD5: ef93077d74c82d846ca60afa33060dd6
-  SHA256: 0cfc97aced54c4898c94f8d3b06994f6690cde00e374d58ca12986ec947491b6
+  Size: 114,722 bytes (114722 bytes)
+  MD5: c314d804ed5321e39104fe7d786beb8a
+  SHA256: 62ac8b1db2301c604352f62dd0328211d59609694d6cca13d744308d26c23b6c
 
 File: winxp_iso_after_enter_key.png
-  Size: 93,707 bytes (93707 bytes)
-  MD5: ef93077d74c82d846ca60afa33060dd6
-  SHA256: 0cfc97aced54c4898c94f8d3b06994f6690cde00e374d58ca12986ec947491b6
+  Size: 114,705 bytes (114705 bytes)
+  MD5: c96b9475c2900ce05d9dc5228f7e86d5
+  SHA256: f452552668dec224c67e5a9dde442832c95f99ce54bbd393f62c8582dd48229b

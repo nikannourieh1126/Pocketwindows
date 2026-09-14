@@ -15,6 +15,7 @@ self.onmessage = function(e) {
         const hddBytes = msg.hddBytes;
         const biosBytes = msg.biosBytes;
         const vgabiosBytes = msg.vgabiosBytes;
+        const ramMegs = msg.ramMegs || 1024;
         
         if ((!isoFile && !isoBytes) || !hddBytes || !biosBytes || !vgabiosBytes) {
             console.error('[Worker] Missing required binary buffers for init');
@@ -22,7 +23,7 @@ self.onmessage = function(e) {
             return;
         }
 
-        startBochs(isoFile || isoBytes, hddBytes, biosBytes, vgabiosBytes);
+        startBochs(isoFile || isoBytes, hddBytes, biosBytes, vgabiosBytes, ramMegs);
     } else if (msg.type === 'keydown') {
         if (bochsModule && bochsModule._bx_wasm_key_event) {
             bochsModule._bx_wasm_key_event(msg.key, false);
@@ -43,15 +44,13 @@ self.onmessage = function(e) {
     }
 };
 
-async function startBochs(isoInput, hddBytes, biosBytes, vgabiosBytes) {
-    console.log('[Worker] Starting Bochs initialization...');
-    self.postMessage({ type: 'log', text: '[Worker] Starting Bochs initialization...', level: 'info' });
+async function startBochs(isoInput, hddBytes, biosBytes, vgabiosBytes, ramMegs) {
+    console.log(`[Worker] Starting Bochs initialization with ${ramMegs}MB RAM...`);
+    self.postMessage({ type: 'log', text: `[Worker] Starting Bochs initialization with ${ramMegs}MB RAM...`, level: 'info' });
     
     try {
-        // Import the compiled Bochs WASM glue script
         importScripts('./bochs.js');
         
-        // Create Bochs module instance
         bochsModule = await createBochsModule({
             noInitialRun: true,
             onFrame: handleFrame,
@@ -63,30 +62,24 @@ async function startBochs(isoInput, hddBytes, biosBytes, vgabiosBytes) {
         console.log('[Worker] Bochs WebAssembly module created successfully');
         self.postMessage({ type: 'log', text: '[Worker] Bochs WebAssembly module created successfully', level: 'info' });
         
-        // Set up virtual filesystem
         const FS = bochsModule.FS;
         
         try {
             FS.mkdir('/pack');
         } catch (e) {
-            // Ignored if already exists
         }
 
-        // Write BIOS and VGABIOS files
         FS.writeFile('/pack/BIOS-bochs-latest', new Uint8Array(biosBytes));
         FS.writeFile('/pack/VGABIOS-lgpl-latest', new Uint8Array(vgabiosBytes));
         
-        // Write Hard Disk image
         const hddArray = new Uint8Array(hddBytes);
         FS.writeFile('/pack/hdd.img', hddArray);
         
-        // Compute geometry dynamically for flat hard disk image
         const totalSectors = Math.floor(hddArray.length / 512) || 1;
         const heads = 16;
         const spt = 63;
         const cylinders = Math.max(1, Math.floor(totalSectors / (heads * spt)));
 
-        // Handle ISO file: if File/Blob, use instant lazy sector stream; otherwise write array
         if (isoInput instanceof File || isoInput instanceof Blob) {
             console.log(`[Worker] Setting up zero-copy ISO lazy sector device for ${isoInput.name} (${isoInput.size} bytes)...`);
             self.postMessage({ type: 'log', text: `[Worker] Zero-copy ISO mounted: ${isoInput.name} (${(isoInput.size / (1024*1024)).toFixed(1)} MB)`, level: 'info' });
@@ -95,7 +88,6 @@ async function startBochs(isoInput, hddBytes, biosBytes, vgabiosBytes) {
             const isoBlob = isoInput;
             const isoSize = isoBlob.size;
 
-            // Create custom Emscripten FS device for /pack/boot.iso
             const isoDevice = FS.makedev(64, 0);
             FS.registerDevice(isoDevice, {
                 open: function(stream) {
@@ -122,11 +114,11 @@ async function startBochs(isoInput, hddBytes, biosBytes, vgabiosBytes) {
                 },
                 llseek: function(stream, offset, whence) {
                     let newPos = stream.position;
-                    if (whence === 0) { // SEEK_SET
+                    if (whence === 0) {
                         newPos = offset;
-                    } else if (whence === 1) { // SEEK_CUR
+                    } else if (whence === 1) {
                         newPos += offset;
-                    } else if (whence === 2) { // SEEK_END
+                    } else if (whence === 2) {
                         newPos = isoSize + offset;
                     }
                     if (newPos < 0) newPos = 0;
@@ -136,23 +128,20 @@ async function startBochs(isoInput, hddBytes, biosBytes, vgabiosBytes) {
                 }
             });
 
-            // Create device file node at /pack/boot.iso
             try {
                 FS.unlink('/pack/boot.iso');
             } catch (e) {}
             FS.mkdev('/pack/boot.iso', 0666, isoDevice);
 
         } else {
-            // Small ArrayBuffer / test disk
             const isoArray = new Uint8Array(isoInput);
             FS.writeFile('/pack/boot.iso', isoArray);
         }
 
-        // Generate high-performance bochsrc.txt
         const bochsrc = `
 # Bochs WASM High-Performance Configuration
 cpu: count=1, ips=500000000, reset_on_triple_fault=1, ignore_bad_msrs=1
-megs: 1024
+megs: ${ramMegs}
 
 clock: sync=none, time0=local
 pci: enabled=1, chipset=i440fx
@@ -176,7 +165,6 @@ boot: disk, cdrom
         console.log('[Worker] bochsrc.txt written, invoking callMain...');
         self.postMessage({ type: 'log', text: '[Worker] Invoking Bochs main loop...', level: 'info' });
 
-        // Start Bochs main loop with arguments
         bochsModule.callMain(['-q', '-f', '/pack/bochsrc.txt']);
         
     } catch (err) {
