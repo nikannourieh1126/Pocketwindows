@@ -8,9 +8,9 @@ Measured Boot Time: 0.782 seconds to initial rendered frame
 
 --- Deliverable Files Summary ---
 File: bochs.wasm
-  Size: 1,397,721 bytes (1397721 bytes)
-  MD5: 30d5086fff7ec958a39dcb9154099ec6
-  SHA256: e91776e7c3df71fdda28b6bc4e7aad5cbf0939696dabdd7922f236c314d03719
+  Size: 1,397,057 bytes (1397057 bytes)
+  MD5: b5056227445de4615112fa665e6af315
+  SHA256: eaab11be6652d46635736840ce34f81caccb9c0544836b8f4d4ad8a5c48c620d
 
 File: bochs.js
   Size: 96,142 bytes (96142 bytes)
@@ -18,9 +18,9 @@ File: bochs.js
   SHA256: 2ca2a3057c6ee9502a29a9f5a8caaf46ad08352267c2b88a28ae418e71573d82
 
 File: wasmcanvas.cc
-  Size: 8,000 bytes (8000 bytes)
-  MD5: b0306d2d395a999692764161e0d3c881
-  SHA256: adecc85765d2d81d3a486a023df1228a9c7280a4911ad89ccfa35d70832686d5
+  Size: 7,956 bytes (7956 bytes)
+  MD5: cc674e93d29951a6f89c8be86bb3ff98
+  SHA256: 70db4eaf526fbaaaef34352e15d0b6da58ce0c25701dfe372395e8c2dce044c9
 
 File: worker.js
   Size: 7,504 bytes (7504 bytes)
@@ -58,11 +58,11 @@ File: bochsrc-wasm.txt
   SHA256: 5c2070a2bc5b64adbec548fa1c649715cef10c5287026f26baa9658feb4722e9
 
 File: winxp_iso_setup_integer_scale.png
-  Size: 52,655 bytes (52655 bytes)
-  MD5: dde9846913476182318a72f694b6d40c
-  SHA256: 8b0d6a10cb53e968f56bd968e42a23e02f249fb4f0495a4b222ce60addf7cbb9
+  Size: 54,649 bytes (54649 bytes)
+  MD5: 53a8d4d3837e8f83dd19233426f5d688
+  SHA256: bbfab01657dbe9eb32b6428cc29a5ded7330a0f162535886e4f4d036732b210a
 
 File: winxp_iso_after_enter_key.png
-  Size: 52,657 bytes (52657 bytes)
-  MD5: cd5cba08ff8699f27c32f4f44dee78ba
-  SHA256: 9ea1015bd27515458fe144b9f277753cfa2f718607b7723fc9ad20a8585bcf41
+  Size: 54,651 bytes (54651 bytes)
+  MD5: 28157acb2e79044f6bc1cd255e9f96f8
+  SHA256: 293c17993e17352deadbea57a35280522dfbe29eb8664323d093eec9824020e3

@@ -104,49 +104,37 @@ void bx_wasmcanvas_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit
                                     Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
                                     bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs, bool font2)
 {
-  Bit32u *buf;
-  Bit16u font_row, mask;
-  Bit8u *font_ptr, fontpixels;
-  Bit32u fgcolor, bgcolor;
-  
   if (!framebuffer) return;
-  
-  buf = (Bit32u*)framebuffer + yc * res_x + xc;
-  fgcolor = wasm_palette[fc];
-  bgcolor = wasm_palette[bc];
-  
-  if (font2) {
-    font_ptr = &vga_charmap[1][(ch << 5) + fy];
-  } else {
-    font_ptr = &vga_charmap[0][(ch << 5) + fy];
-  }
-  
-  do {
-    font_row = *font_ptr++;
+
+  Bit8u *font_ptr = (font2) ? &vga_charmap[1][(ch << 5) + fy]
+                            : &vga_charmap[0][(ch << 5) + fy];
+
+  Bit32u fgcolor = wasm_palette[fc];
+  Bit32u bgcolor = wasm_palette[bc];
+
+  for (Bit8u h = 0; h < fh; h++, fy++) {
+    Bit32u *buf = (Bit32u*)framebuffer + (yc + h) * res_x + xc;
+    Bit16u font_row = *font_ptr++;
+
     if (gfxcharw9) {
       font_row = (font_row << 1) | (font_row & 0x01);
-    } else {
-      font_row <<= 1;
     }
+
+    bool draw_cursor = (curs && (fy >= cs) && (fy <= ce));
+
+    // bit 7 is the left-most pixel (0x80 or 0x100 if gfxcharw9 shifted)
+    Bit16u bit_mask = gfxcharw9 ? 0x100 : 0x80;
     if (fx > 0) {
-      font_row <<= fx;
+      bit_mask >>= fx;
     }
-    fontpixels = fw;
-    if (curs && (fy >= cs) && (fy <= ce))
-      mask = 0x100;
-    else
-      mask = 0x00;
-    do {
-      if ((font_row & 0x100) == mask)
-        *buf = bgcolor;
-      else
-        *buf = fgcolor;
-      buf++;
-      if (fontpixels & 1) font_row <<= 1;
-    } while (--fontpixels);
-    buf += (res_x - fw);
-    fy++;
-  } while (--fh);
+
+    for (Bit8u w = 0; w < fw; w++) {
+      bool bit = (font_row & bit_mask) != 0;
+      if (draw_cursor) bit = !bit;
+      buf[w] = bit ? fgcolor : bgcolor;
+      bit_mask >>= 1;
+    }
+  }
 }
 
 void bx_wasmcanvas_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
