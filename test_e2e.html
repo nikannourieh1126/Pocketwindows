@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Pocket Windows E2E Test</title>
+<style>
+  body { background: #111; color: #fff; font-family: monospace; text-align: center; margin: 0; padding: 20px; }
+  canvas { border: 2px solid #555; background: #000; image-rendering: pixelated; margin-top: 20px; }
+</style>
+</head>
+<body>
+<h1>Pocket Windows WASM E2E Test</h1>
+<div id="status">Initializing Web Worker...</div>
+<canvas id="screen" width="720" height="400"></canvas>
+
+<script>
+const statusDiv = document.getElementById('status');
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d');
+
+const worker = new Worker('worker.js');
+
+worker.onmessage = function(e) {
+    const msg = e.data;
+    if (msg.type === 'frame') {
+        if (canvas.width !== msg.width || canvas.height !== msg.height) {
+            canvas.width = msg.width;
+            canvas.height = msg.height;
+        }
+        ctx.putImageData(msg.imageData, 0, 0);
+        statusDiv.innerText = `Emulator Running: Frame Rendered (${msg.width}x${msg.height})`;
+        window.frameRendered = true;
+    } else if (msg.type === 'dimension') {
+        canvas.width = msg.width;
+        canvas.height = msg.height;
+    } else if (msg.type === 'audio') {
+        statusDiv.innerText = 'Audio Output Playing (PCM samples received)';
+        window.audioReceived = true;
+    } else if (msg.type === 'request_mic') {
+        statusDiv.innerText = `Microphone Permission Requested: ${msg.enable}`;
+        window.micRequested = true;
+    } else if (msg.type === 'log') {
+        console.log('[Worker Log]', msg.text);
+    } else if (msg.type === 'error') {
+        statusDiv.innerText = 'Error: ' + msg.message;
+        window.hasError = true;
+    }
+};
+
+async function start() {
+    try {
+        statusDiv.innerText = 'Fetching BIOS binaries...';
+        const biosRes = await fetch('BIOS-bochs-latest');
+        const biosBytes = await biosRes.arrayBuffer();
+
+        const vgabiosRes = await fetch('VGABIOS-lgpl-latest');
+        const vgabiosBytes = await vgabiosRes.arrayBuffer();
+
+        const dummyIso = new ArrayBuffer(10 * 1024 * 1024);
+        const dummyHdd = new ArrayBuffer(10 * 1024 * 1024);
+
+        statusDiv.innerText = 'Posting init to Worker...';
+        worker.postMessage({
+            type: 'init',
+            isoBytes: dummyIso,
+            hddBytes: dummyHdd,
+            biosBytes: biosBytes,
+            vgabiosBytes: vgabiosBytes
+        });
+    } catch (err) {
+        statusDiv.innerText = 'Start Error: ' + err.message;
+        console.error(err);
+    }
+}
+
+start();
+</script>
+</body>
+</html>
