@@ -53,7 +53,9 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            max-width: 95vw;
+            width: 90vw;
+            max-width: 1280px;
+            aspect-ratio: 18 / 10;
             overflow: hidden;
         }
         canvas {
@@ -61,15 +63,15 @@
             image-rendering: pixelated;
             image-rendering: crisp-edges;
             outline: none;
-            max-width: 100%;
-            height: auto;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
         }
         #log-output {
             margin-top: 20px;
-            width: 720px;
-            max-width: 95vw;
-            height: 150px;
+            width: 90vw;
+            max-width: 1280px;
+            height: 160px;
             background-color: #11111b;
             border: 1px solid #45475a;
             border-radius: 6px;
@@ -121,20 +123,6 @@
             "MetaLeft": 104, "MetaRight": 105, "ContextMenu": 106
         };
 
-        function updateCanvasDisplaySize() {
-            const containerWidth = document.getElementById('canvas-container').clientWidth - 16;
-            const nativeWidth = canvas.width || 720;
-            const nativeHeight = canvas.height || 400;
-
-            let scale = Math.floor(containerWidth / nativeWidth);
-            if (scale < 1) scale = 1;
-
-            canvas.style.width = `${nativeWidth * scale}px`;
-            canvas.style.height = `${nativeHeight * scale}px`;
-        }
-
-        window.addEventListener('resize', updateCanvasDisplaySize);
-
         function log(text, isErr = false) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -149,7 +137,7 @@
             return await res.arrayBuffer();
         }
 
-        async function startEmulator(isoBuffer, customHddBuffer = null) {
+        async function startEmulator(isoInput, customHddBuffer = null) {
             if (worker) {
                 worker.terminate();
             }
@@ -183,7 +171,6 @@
                     if (msg.type === 'dimension') {
                         canvas.width = msg.width;
                         canvas.height = msg.height;
-                        updateCanvasDisplaySize();
                         log(`[Host] Canvas resized to ${msg.width}x${msg.height}`);
                     } else if (msg.type === 'frame') {
                         if (msg.imageData) {
@@ -197,13 +184,25 @@
                     }
                 };
 
-                worker.postMessage({
-                    type: 'init',
-                    isoBytes: isoBuffer,
-                    hddBytes: hddBytes,
-                    biosBytes: biosBytes,
-                    vgabiosBytes: vgabiosBytes
-                }, [isoBuffer, hddBytes, biosBytes, vgabiosBytes]);
+                // Check if isoInput is a File handle (zero-copy) or ArrayBuffer
+                if (isoInput instanceof File || isoInput instanceof Blob) {
+                    log(`[Host] Mounting ISO via zero-copy stream handle (${(isoInput.size / (1024*1024)).toFixed(1)} MB)...`);
+                    worker.postMessage({
+                        type: 'init',
+                        isoFile: isoInput,
+                        hddBytes: hddBytes,
+                        biosBytes: biosBytes,
+                        vgabiosBytes: vgabiosBytes
+                    }, [hddBytes, biosBytes, vgabiosBytes]);
+                } else {
+                    worker.postMessage({
+                        type: 'init',
+                        isoBytes: isoInput,
+                        hddBytes: hddBytes,
+                        biosBytes: biosBytes,
+                        vgabiosBytes: vgabiosBytes
+                    }, [isoInput, hddBytes, biosBytes, vgabiosBytes]);
+                }
 
             } catch (err) {
                 statusEl.textContent = 'Status: Initialization Failed';
@@ -254,13 +253,11 @@
         document.getElementById('iso-file').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            log(`[Host] Selected ISO/Disk: ${file.name} (${file.size} bytes)`);
-            statusEl.textContent = 'Status: Reading file...';
-            const isoBuffer = await file.arrayBuffer();
-            await startEmulator(isoBuffer);
+            log(`[Host] Selected ISO: ${file.name} (${(file.size / (1024*1024)).toFixed(1)} MB)`);
+            statusEl.textContent = 'Status: Initializing zero-copy ISO mount...';
+            // Pass the raw File object directly without loading entire buffer into RAM!
+            await startEmulator(file);
         });
-
-        updateCanvasDisplaySize();
     </script>
 </body>
 </html>
