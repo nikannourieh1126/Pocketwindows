@@ -18,34 +18,27 @@
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-#define _MULTI_THREAD
-
 #define BX_PLUGGABLE
 
 #include "bochs.h"
+#include "gui/gui.h"
+#include "plugin.h"
 #include "param_names.h"
 #include "keymap.h"
 #include "iodev.h"
-#if BX_WITH_WASMCANVAS
 
 #include <stdlib.h>
 #include <emscripten/emscripten.h>
 
 #include "icon_bochs.h"
-#include "gui/gui.h"
 
 class bx_wasmcanvas_gui_c : public bx_gui_c {
 public:
   bx_wasmcanvas_gui_c();
   DECLARE_GUI_VIRTUAL_METHODS()
-  DECLARE_GUI_NEW_VIRTUAL_METHODS()
   virtual void draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
                          Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
                          bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs, bool font2);
-  virtual void text_update(Bit8u *old_text, Bit8u *new_text,
-                          unsigned long cursor_x,
-                          unsigned long cursor_y,
-                          bx_vga_tminfo_t *tm_info);
 };
 
 static bx_wasmcanvas_gui_c *theGui = NULL;
@@ -53,19 +46,17 @@ IMPLEMENT_GUI_PLUGIN_CODE(wasmcanvas)
 
 #define LOG_THIS theGui->
 
-static unsigned res_x, res_y;
-static unsigned disp_bpp;
+static unsigned res_x = 720, res_y = 400;
 static Bit8u* framebuffer = NULL;
 static unsigned headerbar_height = 0;
-static Uint32 wasm_palette[256];
+static Bit32u wasm_palette[256];
 static bool frame_dirty = false;
 static bool mic_active = false;
 
-// C-linkage WASM export helpers for keyboard & mouse input
 extern "C" {
   EMSCRIPTEN_KEEPALIVE
   void bx_wasm_key_event(Bit32u key_code, bool is_press) {
-    DEV_kbd_gen_scancode(key_code, !is_press);
+    DEV_kbd_gen_scancode(key_code | (is_press ? 0 : BX_KEY_RELEASED));
   }
 
   EMSCRIPTEN_KEEPALIVE
@@ -102,22 +93,17 @@ bx_wasmcanvas_gui_c::bx_wasmcanvas_gui_c()
   theGui = this;
 }
 
-void bx_wasmcanvas_gui_c::init(unsigned xres, unsigned yres)
+void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 {
-  BX_INFO(("WASM Canvas GUI initialized with Sound & Mic bridge"));
-  res_x = xres;
-  res_y = yres;
-  
-  if (framebuffer) free(framebuffer);
-  framebuffer = (Bit8u*)malloc(xres * yres * 4);
-  if (!framebuffer) {
-    BX_PANIC(("Failed to allocate framebuffer"));
-    return;
+  put("WASMCANVAS");
+  headerbar_height = headerbar_y;
+
+  framebuffer = (Bit8u*)malloc(res_x * res_y * 4);
+  if (framebuffer) {
+    memset(framebuffer, 0, res_x * res_y * 4);
   }
-  
-  memset(framebuffer, 0, xres * yres * 4);
   frame_dirty = true;
-  
+
   EM_ASM({
     if (Module.onDimensionChange) {
       Module.onDimensionChange($0, $1);
@@ -125,19 +111,34 @@ void bx_wasmcanvas_gui_c::init(unsigned xres, unsigned yres)
   }, res_x, res_y + headerbar_height);
 }
 
-void bx_wasmcanvas_gui_c::cleanup(void)
+void bx_wasmcanvas_gui_c::handle_events(void)
 {
-  if (framebuffer) {
-    free(framebuffer);
-    framebuffer = NULL;
+  if (frame_dirty) {
+    flush();
   }
 }
 
-bool bx_wasmcanvas_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
+void bx_wasmcanvas_gui_c::flush(void)
 {
-  wasm_palette[index] = (red << 16) | (green << 8) | blue;
-  frame_dirty = true;
-  return 0;
+  if (!framebuffer || !frame_dirty) return;
+
+  EM_ASM({
+    if (Module.onFrame) {
+      var fbBytes = $1 * $2 * 4;
+      var fbData = Module.HEAPU8.subarray($0, $0 + fbBytes);
+      Module.onFrame(fbData, $1, $2);
+    }
+  }, (unsigned)framebuffer, res_x, res_y);
+
+  frame_dirty = false;
+}
+
+void bx_wasmcanvas_gui_c::clear_screen(void)
+{
+  if (framebuffer) {
+    memset(framebuffer, 0, res_x * res_y * 4);
+    frame_dirty = true;
+  }
 }
 
 void bx_wasmcanvas_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
@@ -192,23 +193,39 @@ void bx_wasmcanvas_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit
 }
 
 void bx_wasmcanvas_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
-                                      unsigned long cursor_x,
-                                      unsigned long cursor_y,
+                                      unsigned long cursor_x, unsigned long cursor_y,
                                       bx_vga_tminfo_t *tm_info)
 {
   text_update_common(old_text, new_text, cursor_x, tm_info);
   flush();
 }
 
+int bx_wasmcanvas_gui_c::get_clipboard_text(Bit8u **bytes, Bit32s *nbytes)
+{
+  return 0;
+}
+
+int bx_wasmcanvas_gui_c::set_clipboard_text(char *text_snapshot, Bit32u len)
+{
+  return 0;
+}
+
+bool bx_wasmcanvas_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
+{
+  wasm_palette[index] = (red << 16) | (green << 8) | blue;
+  frame_dirty = true;
+  return 0;
+}
+
 void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsigned y)
 {
   if (!framebuffer) return;
-  
+
   Bit32u *buf = (Bit32u*)framebuffer + y * res_x + x;
   int i = y_tilesize;
   if (i + y > res_y) i = res_y - y;
-  
-  switch (disp_bpp) {
+
+  switch (guest_bpp) {
     case 8:
       do {
         Bit32u *buf_row = buf;
@@ -264,40 +281,61 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
       } while(--i);
       break;
     default:
-      BX_PANIC(("%u bpp not implemented", disp_bpp));
-      return;
+      break;
   }
   frame_dirty = true;
 }
 
-void bx_wasmcanvas_gui_c::flush(void)
+void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)
 {
-  if (!framebuffer || !frame_dirty) return;
-  
-  EM_ASM({
-    if (Module.onFrame) {
-      var fbBytes = $1 * $2 * 4;
-      var fbData = Module.HEAPU8.subarray($0, $0 + fbBytes);
-      Module.onFrame(fbData, $1, $2);
-    }
-  }, (unsigned)framebuffer, res_x, res_y);
+  guest_textmode = (fheight > 0);
+  guest_xres = x;
+  guest_yres = y;
+  guest_bpp = bpp;
 
-  frame_dirty = false;
-}
+  res_x = x;
+  res_y = y;
 
-void bx_wasmcanvas_gui_c::clear_screen(void)
-{
+  if (framebuffer) free(framebuffer);
+  framebuffer = (Bit8u*)malloc(res_x * res_y * 4);
   if (framebuffer) {
     memset(framebuffer, 0, res_x * res_y * 4);
-    frame_dirty = true;
   }
+  frame_dirty = true;
+
+  EM_ASM({
+    if (Module.onDimensionChange) {
+      Module.onDimensionChange($0, $1);
+    }
+  }, res_x, res_y + headerbar_height);
 }
 
-void bx_wasmcanvas_gui_c::handle_events(void)
+unsigned bx_wasmcanvas_gui_c::create_bitmap(const unsigned char *bmap, unsigned xdim, unsigned ydim)
 {
-  if (frame_dirty) {
-    flush();
+  return 0;
+}
+
+unsigned bx_wasmcanvas_gui_c::headerbar_bitmap(unsigned bmap_id, unsigned alignment, void (*f)(void))
+{
+  return 0;
+}
+
+void bx_wasmcanvas_gui_c::show_headerbar(void)
+{
+}
+
+void bx_wasmcanvas_gui_c::replace_bitmap(unsigned hbar_id, unsigned bmap_id)
+{
+}
+
+void bx_wasmcanvas_gui_c::exit(void)
+{
+  if (framebuffer) {
+    free(framebuffer);
+    framebuffer = NULL;
   }
 }
 
-#endif // BX_WITH_WASMCANVAS
+void bx_wasmcanvas_gui_c::mouse_enabled_changed_specific(bool val)
+{
+}

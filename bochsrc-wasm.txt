@@ -2,7 +2,7 @@
 # Optimized for maximum speed, lightweight footprint, and full audio/microphone support
 
 # CPU and memory settings
-cpu: count=1, ips=15000000, quantum=16, reset_on_triple_fault=1, ignore_bad_msrs=1
+cpu: count=1, ips=15000000, reset_on_triple_fault=1, ignore_bad_msrs=1
 clock: sync=none, time0=local
 megs: 512
 
@@ -21,7 +21,7 @@ sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
 display_library: wasmcanvas
 
 # Keyboard and mouse
-keyboard_type: mf, serial_delay=200
+keyboard: type=mf, serial_delay=200
 mouse: enabled=0
 
 # ATA controller configuration

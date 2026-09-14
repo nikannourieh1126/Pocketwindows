@@ -3,15 +3,6 @@
 
 let bochsModule = null;
 
-// Hard disk configuration
-const HDD_SIZE_MB = 2048; // Default to 2GB to avoid browser memory issues
-const HDD_SIZE_BYTES = HDD_SIZE_MB * 1024 * 1024;
-const HDD_CYLINDERS = Math.floor(HDD_SIZE_BYTES / (16 * 63 * 512));
-const HDD_HEADS = 16;
-const HDD_SPT = 63;
-
-console.log(`[Worker] HDD Configuration: ${HDD_SIZE_MB}MB, cylinders=${HDD_CYLINDERS}, heads=${HDD_HEADS}, spt=${HDD_SPT}`);
-
 // Handle messages from main thread
 self.onmessage = function(e) {
     const msg = e.data;
@@ -31,19 +22,23 @@ self.onmessage = function(e) {
 
         startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes);
     } else if (msg.type === 'keydown') {
-        if (bochsModule && bochsModule._bx_wasm_key_event) {
-            bochsModule._bx_wasm_key_event(msg.scancode, true);
+        const key = msg.scancode !== undefined ? msg.scancode : msg.key;
+        if (bochsModule && bochsModule._bx_wasm_key_event && key !== undefined) {
+            bochsModule._bx_wasm_key_event(key, true);
         }
     } else if (msg.type === 'keyup') {
-        if (bochsModule && bochsModule._bx_wasm_key_event) {
-            bochsModule._bx_wasm_key_event(msg.scancode, false);
+        const key = msg.scancode !== undefined ? msg.scancode : msg.key;
+        if (bochsModule && bochsModule._bx_wasm_key_event && key !== undefined) {
+            bochsModule._bx_wasm_key_event(key, false);
         }
-    } else if (msg.type === 'mousemove') {
+    } else if (msg.type === 'mouse' || msg.type === 'mousemove') {
+        const dx = msg.x !== undefined ? msg.x : (msg.deltaX || 0);
+        const dy = msg.y !== undefined ? msg.y : (msg.deltaY || 0);
+        const btns = msg.buttonState !== undefined ? msg.buttonState : (msg.buttons || 0);
         if (bochsModule && bochsModule._bx_wasm_mouse_event) {
-            bochsModule._bx_wasm_mouse_event(msg.deltaX || 0, msg.deltaY || 0, msg.buttons || 0);
+            bochsModule._bx_wasm_mouse_event(dx, dy, btns);
         }
     } else if (msg.type === 'mic_data') {
-        // Microphone PCM audio chunks received from main thread getUserMedia() stream
         if (bochsModule && bochsModule._bx_wasm_mic_input && msg.pcmData) {
             const ptr = bochsModule._malloc(msg.pcmData.byteLength);
             bochsModule.HEAPU8.set(new Uint8Array(msg.pcmData), ptr);
@@ -60,6 +55,7 @@ async function startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes) {
         importScripts('./bochs.js');
         
         bochsModule = await createBochsModule({
+            noInitialRun: true,
             onFrame: handleFrame,
             onDimensionChange: handleDimensionChange,
             onAudioOutput: handleAudioOutput,
@@ -82,9 +78,17 @@ async function startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes) {
         const isoArray = new Uint8Array(isoBytes);
         FS.writeFile('/pack/boot.iso', isoArray);
 
+        // Dynamically compute cylinders based on hard disk image size
+        const heads = 16;
+        const spt = 63;
+        const bytesPerSector = 512;
+        const cylinders = Math.max(1, Math.floor(hddArray.byteLength / (heads * spt * bytesPerSector)));
+
+        console.log(`[Worker] Dynamic HDD CHS Geometry: cylinders=${cylinders}, heads=${heads}, spt=${spt} (size: ${hddArray.byteLength} bytes)`);
+
         const bochsrc = `
 # Bochs WASM Configuration - Optimized Execution Engine with SB16 Audio
-cpu: count=1, ips=15000000, quantum=16, reset_on_triple_fault=1, ignore_bad_msrs=1
+cpu: count=1, ips=15000000, reset_on_triple_fault=1, ignore_bad_msrs=1
 clock: sync=none, time0=local
 megs: 512
 
@@ -98,11 +102,11 @@ sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
 
 display_library: wasmcanvas
 
-keyboard_type: mf, serial_delay=200
+keyboard: type=mf, serial_delay=200
 mouse: enabled=0
 
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
-ata0-master: type=disk, mode=flat, path=/pack/hdd.img, cylinders=${HDD_CYLINDERS}, heads=${HDD_HEADS}, spt=${HDD_SPT}
+ata0-master: type=disk, mode=flat, path=/pack/hdd.img, cylinders=${cylinders}, heads=${heads}, spt=${spt}
 ata0-slave: type=cdrom, path=/pack/boot.iso, status=inserted
 
 boot: cdrom
