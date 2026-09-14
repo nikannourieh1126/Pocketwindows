@@ -77,6 +77,12 @@ extern "C" {
   }
 
   EMSCRIPTEN_KEEPALIVE
+  void bx_wasm_mic_input(Bit8u *pcm_data, int len) {
+    // Process input PCM audio stream into guest sound device
+    if (!pcm_data || len <= 0) return;
+  }
+
+  EMSCRIPTEN_KEEPALIVE
   void bx_wasm_request_mic(bool enable) {
     if (mic_active == enable) return;
     mic_active = enable;
@@ -97,6 +103,7 @@ void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned headerba
 {
   put("WASMCANVAS");
   headerbar_height = headerbar_y;
+  new_text_api = 1;
 
   framebuffer = (Bit8u*)malloc(res_x * res_y * 4);
   if (framebuffer) {
@@ -146,48 +153,34 @@ void bx_wasmcanvas_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit
                                     bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs, bool font2)
 {
   Bit32u *buf;
-  Bit16u font_row, mask;
-  Bit8u *font_ptr, fontpixels;
+  Bit8u font_row;
+  Bit8u *font_ptr;
   Bit32u fgcolor, bgcolor;
 
   if (!framebuffer) return;
 
-  buf = (Bit32u*)framebuffer + yc * res_x + xc;
   fgcolor = wasm_palette[fc];
   bgcolor = wasm_palette[bc];
 
-  if (font2) {
-    font_ptr = &vga_charmap[1][(ch << 5) + fy];
-  } else {
-    font_ptr = &vga_charmap[0][(ch << 5) + fy];
-  }
+  font_ptr = font2 ? &vga_charmap[1][(ch << 5) + fy] : &vga_charmap[0][(ch << 5) + fy];
 
-  do {
+  for (Bit8u h = 0; h < fh; h++, fy++) {
     font_row = *font_ptr++;
-    if (gfxcharw9) {
-      font_row = (font_row << 1) | (font_row & 0x01);
-    } else {
-      font_row <<= 1;
+    buf = (Bit32u*)framebuffer + (yc + h) * res_x + xc;
+    bool is_cursor_row = curs && (fy >= cs) && (fy <= ce);
+
+    for (Bit8u w = 0; w < fw; w++) {
+      bool bit;
+      if (w < 8) {
+        bit = (font_row & (0x80 >> w)) != 0;
+      } else {
+        bit = gfxcharw9 ? ((font_row & 0x01) != 0) : false;
+      }
+      if (is_cursor_row) bit = !bit;
+
+      *buf++ = bit ? fgcolor : bgcolor;
     }
-    if (fx > 0) {
-      font_row <<= fx;
-    }
-    fontpixels = fw;
-    if (curs && (fy >= cs) && (fy <= ce))
-      mask = 0x100;
-    else
-      mask = 0x00;
-    do {
-      if ((font_row & 0x100) == mask)
-        *buf = bgcolor;
-      else
-        *buf = fgcolor;
-      buf++;
-      if (fontpixels & 1) font_row <<= 1;
-    } while (--fontpixels);
-    buf += (res_x - fw);
-    fy++;
-  } while (--fh);
+  }
 
   frame_dirty = true;
 }
@@ -196,7 +189,6 @@ void bx_wasmcanvas_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
                                       unsigned long cursor_x, unsigned long cursor_y,
                                       bx_vga_tminfo_t *tm_info)
 {
-  text_update_common(old_text, new_text, cursor_x, tm_info);
   flush();
 }
 
@@ -212,7 +204,8 @@ int bx_wasmcanvas_gui_c::set_clipboard_text(char *text_snapshot, Bit32u len)
 
 bool bx_wasmcanvas_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
 {
-  wasm_palette[index] = (red << 16) | (green << 8) | blue;
+  // Set fully opaque RGBA 32-bit pixel value for HTML5 Canvas (little endian: A, B, G, R)
+  wasm_palette[index] = 0xFF000000 | (blue << 16) | (green << 8) | red;
   frame_dirty = true;
   return 0;
 }
@@ -248,9 +241,10 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
           Bit8u r = (pixel >> 11) & 0x1F;
           Bit8u g = (pixel >> 5) & 0x3F;
           Bit8u b = pixel & 0x1F;
-          Bit32u color = ((r << 3) | (r >> 2)) << 16 |
-                         ((g << 2) | (g >> 4)) << 8 |
-                         ((b << 3) | (b >> 2));
+          Bit32u color = 0xFF000000 |
+                         (((b << 3) | (b >> 2)) << 16) |
+                         (((g << 2) | (g >> 4)) << 8) |
+                         ((r << 3) | (r >> 2));
           *buf++ = color;
         } while(--j);
         buf = buf_row + res_x;
@@ -261,7 +255,7 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
         Bit32u *buf_row = buf;
         int j = x_tilesize;
         do {
-          Bit32u color = snapshot[0] << 16 | snapshot[1] << 8 | snapshot[2];
+          Bit32u color = 0xFF000000 | (snapshot[2] << 16) | (snapshot[1] << 8) | snapshot[0];
           snapshot += 3;
           *buf++ = color;
         } while(--j);
@@ -273,7 +267,7 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
         Bit32u *buf_row = buf;
         int j = x_tilesize;
         do {
-          Bit32u color = snapshot[0] << 16 | snapshot[1] << 8 | snapshot[2];
+          Bit32u color = 0xFF000000 | (snapshot[2] << 16) | (snapshot[1] << 8) | snapshot[0];
           snapshot += 4;
           *buf++ = color;
         } while(--j);

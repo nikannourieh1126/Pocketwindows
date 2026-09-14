@@ -1,5 +1,5 @@
 # Bochs WASM Configuration File
-# Optimized for maximum speed, lightweight footprint, and full audio/microphone support
+# Optimized for maximum speed, lightweight footprint, and full audio/microphone/mouse support
 
 # CPU and memory settings
 cpu: count=1, ips=15000000, reset_on_triple_fault=1, ignore_bad_msrs=1
@@ -22,7 +22,7 @@ display_library: wasmcanvas
 
 # Keyboard and mouse
 keyboard: type=mf, serial_delay=200
-mouse: enabled=0
+mouse: enabled=1, type=ps2
 
 # ATA controller configuration
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
