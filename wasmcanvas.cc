@@ -18,14 +18,15 @@
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-#define BX_WITH_WASMCANVAS 1
 #define _MULTI_THREAD
+
 #define BX_PLUGGABLE
 
 #include "bochs.h"
 #include "param_names.h"
 #include "keymap.h"
 #include "iodev.h"
+#if BX_WITH_WASMCANVAS
 
 #include <stdlib.h>
 #include <emscripten/emscripten.h>
@@ -37,9 +38,14 @@ class bx_wasmcanvas_gui_c : public bx_gui_c {
 public:
   bx_wasmcanvas_gui_c();
   DECLARE_GUI_VIRTUAL_METHODS()
+  DECLARE_GUI_NEW_VIRTUAL_METHODS()
   virtual void draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
                          Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
                          bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs, bool font2);
+  virtual void text_update(Bit8u *old_text, Bit8u *new_text,
+                          unsigned long cursor_x,
+                          unsigned long cursor_y,
+                          bx_vga_tminfo_t *tm_info);
 };
 
 static bx_wasmcanvas_gui_c *theGui = NULL;
@@ -47,46 +53,35 @@ IMPLEMENT_GUI_PLUGIN_CODE(wasmcanvas)
 
 #define LOG_THIS theGui->
 
-static unsigned res_x = 0, res_y = 0;
-static unsigned disp_bpp = 8;
+static unsigned res_x, res_y;
+static unsigned disp_bpp;
 static Bit8u* framebuffer = NULL;
 static unsigned headerbar_height = 0;
-static Bit32u wasm_palette[256];
+static Uint32 wasm_palette[256];
+static bool frame_dirty = false;
 
 bx_wasmcanvas_gui_c::bx_wasmcanvas_gui_c()
 {
   theGui = this;
 }
 
-void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned header_bar_y)
+void bx_wasmcanvas_gui_c::init(unsigned xres, unsigned yres)
 {
-  BX_INFO(("WASM Canvas GUI specific_init called"));
-  headerbar_height = header_bar_y;
-  new_text_api = 1;
-}
-
-void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)
-{
-  BX_INFO(("WASM Canvas dimension_update: %dx%d, bpp=%d", x, y, bpp));
-  res_x = x;
-  res_y = y;
-  disp_bpp = bpp;
+  BX_INFO(("WASM Canvas GUI initialized (optimized execution pipeline)"));
+  res_x = xres;
+  res_y = yres;
   
-  if (framebuffer) {
-    free(framebuffer);
-  }
-
   // Allocate framebuffer: 4 bytes per pixel (RGBA)
-  framebuffer = (Bit8u*)malloc(x * y * 4);
+  if (framebuffer) free(framebuffer);
+  framebuffer = (Bit8u*)malloc(xres * yres * 4);
   if (!framebuffer) {
     BX_PANIC(("Failed to allocate framebuffer"));
     return;
   }
   
-  // Initialize to black
-  memset(framebuffer, 0, x * y * 4);
+  memset(framebuffer, 0, xres * yres * 4);
+  frame_dirty = true;
   
-  // Notify JS of dimension change
   EM_ASM({
     if (Module.onDimensionChange) {
       Module.onDimensionChange($0, $1);
@@ -94,9 +89,18 @@ void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fhei
   }, res_x, res_y + headerbar_height);
 }
 
+void bx_wasmcanvas_gui_c::cleanup(void)
+{
+  if (framebuffer) {
+    free(framebuffer);
+    framebuffer = NULL;
+  }
+}
+
 bool bx_wasmcanvas_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
 {
-  wasm_palette[index] = (255 << 24) | (blue << 16) | (green << 8) | red;
+  wasm_palette[index] = (red << 16) | (green << 8) | blue;
+  frame_dirty = true;
   return 0;
 }
 
@@ -104,37 +108,51 @@ void bx_wasmcanvas_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit
                                     Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
                                     bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs, bool font2)
 {
+  Bit32u *buf;
+  Bit16u font_row, mask;
+  Bit8u *font_ptr, fontpixels;
+  Bit32u fgcolor, bgcolor;
+
   if (!framebuffer) return;
 
-  Bit8u *font_ptr = (font2) ? &vga_charmap[1][(ch << 5) + fy]
-                            : &vga_charmap[0][(ch << 5) + fy];
+  buf = (Bit32u*)framebuffer + yc * res_x + xc;
+  fgcolor = wasm_palette[fc];
+  bgcolor = wasm_palette[bc];
 
-  Bit32u fgcolor = wasm_palette[fc];
-  Bit32u bgcolor = wasm_palette[bc];
+  if (font2) {
+    font_ptr = &vga_charmap[1][(ch << 5) + fy];
+  } else {
+    font_ptr = &vga_charmap[0][(ch << 5) + fy];
+  }
 
-  for (Bit8u h = 0; h < fh; h++, fy++) {
-    Bit32u *buf = (Bit32u*)framebuffer + (yc + h) * res_x + xc;
-    Bit16u font_row = *font_ptr++;
-
+  do {
+    font_row = *font_ptr++;
     if (gfxcharw9) {
       font_row = (font_row << 1) | (font_row & 0x01);
+    } else {
+      font_row <<= 1;
     }
-
-    bool draw_cursor = (curs && (fy >= cs) && (fy <= ce));
-
-    // bit 7 is the left-most pixel (0x80 or 0x100 if gfxcharw9 shifted)
-    Bit16u bit_mask = gfxcharw9 ? 0x100 : 0x80;
     if (fx > 0) {
-      bit_mask >>= fx;
+      font_row <<= fx;
     }
+    fontpixels = fw;
+    if (curs && (fy >= cs) && (fy <= ce))
+      mask = 0x100;
+    else
+      mask = 0x00;
+    do {
+      if ((font_row & 0x100) == mask)
+        *buf = bgcolor;
+      else
+        *buf = fgcolor;
+      buf++;
+      if (fontpixels & 1) font_row <<= 1;
+    } while (--fontpixels);
+    buf += (res_x - fw);
+    fy++;
+  } while (--fh);
 
-    for (Bit8u w = 0; w < fw; w++) {
-      bool bit = (font_row & bit_mask) != 0;
-      if (draw_cursor) bit = !bit;
-      buf[w] = bit ? fgcolor : bgcolor;
-      bit_mask >>= 1;
-    }
-  }
+  frame_dirty = true;
 }
 
 void bx_wasmcanvas_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
@@ -213,82 +231,37 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
       BX_PANIC(("%u bpp not implemented", disp_bpp));
       return;
   }
+  frame_dirty = true;
 }
 
 void bx_wasmcanvas_gui_c::flush(void)
 {
-  if (!framebuffer || res_x == 0 || res_y == 0) return;
+  if (!framebuffer || !frame_dirty) return;
   
   EM_ASM({
     if (Module.onFrame) {
-      var ptr = $0;
-      var w = $1;
-      var h = $2;
-      var fbBytes = w * h * 4;
-      var fbData = new Uint8Array(Module.HEAPU8.buffer, ptr, fbBytes);
-      var clamped = new Uint8ClampedArray(fbData.slice());
-      var imageData = new ImageData(clamped, w, h);
-      Module.onFrame(imageData);
+      var fbBytes = $1 * $2 * 4;
+      var fbData = Module.HEAPU8.subarray($0, $0 + fbBytes);
+      Module.onFrame(fbData, $1, $2);
     }
-  }, (uintptr_t)framebuffer, res_x, res_y);
+  }, (unsigned)framebuffer, res_x, res_y);
+
+  frame_dirty = false;
 }
 
 void bx_wasmcanvas_gui_c::clear_screen(void)
 {
   if (framebuffer) {
     memset(framebuffer, 0, res_x * res_y * 4);
+    frame_dirty = true;
   }
 }
 
 void bx_wasmcanvas_gui_c::handle_events(void)
 {
+  if (frame_dirty) {
+    flush();
+  }
 }
 
-unsigned bx_wasmcanvas_gui_c::create_bitmap(const unsigned char *bmap, unsigned xdim, unsigned ydim)
-{
-  return 0;
-}
-
-unsigned bx_wasmcanvas_gui_c::headerbar_bitmap(unsigned bmap_id, unsigned alignment, void (*f)(void))
-{
-  return 0;
-}
-
-void bx_wasmcanvas_gui_c::show_headerbar(void)
-{
-}
-
-void bx_wasmcanvas_gui_c::replace_bitmap(unsigned hbar_id, unsigned bmap_id)
-{
-}
-
-void bx_wasmcanvas_gui_c::exit(void)
-{
-}
-
-void bx_wasmcanvas_gui_c::mouse_enabled_changed_specific(bool val)
-{
-}
-
-int bx_wasmcanvas_gui_c::get_clipboard_text(Bit8u **bytes, Bit32s *nbytes)
-{
-  return 0;
-}
-
-int bx_wasmcanvas_gui_c::set_clipboard_text(char *snapshot, Bit32u len)
-{
-  return 0;
-}
-
-extern "C" {
-EMSCRIPTEN_KEEPALIVE void bx_wasm_key_event(Bit32u key, bool release) {
-  if (release)
-    DEV_kbd_gen_scancode(key | BX_KEY_RELEASED);
-  else
-    DEV_kbd_gen_scancode(key);
-}
-
-EMSCRIPTEN_KEEPALIVE void bx_wasm_mouse_event(int x, int y, int z, int button_state, bool abs_mode) {
-  DEV_mouse_motion(x, y, z, button_state, abs_mode);
-}
-}
+#endif // BX_WITH_WASMCANVAS

@@ -1,23 +1,25 @@
 # Bochs WASM Configuration File
-# Custom config for Pocket Windows with hard disk and CD-ROM
+# Optimized for maximum speed, lightweight footprint, and zero-delay emulation
 
 # CPU and memory settings
-cpu: count=1, ips=500000000, reset_on_triple_fault=1, ignore_bad_msrs=1, quantum=30
-megs: 1024
-
+cpu: count=1, ips=15000000, quantum=16, reset_on_triple_fault=1, ignore_bad_msrs=1
 clock: sync=none, time0=local
-pci: enabled=1, chipset=i440fx
+megs: 512
 
 # ROM images
 romimage: file=/pack/BIOS-bochs-latest, options=fastboot
 vgaromimage: file=/pack/VGABIOS-lgpl-latest
 
+# PCI and VGA settings
+pci: enabled=1, chipset=i440fx
+vga: extension=vbe, update_freq=60
+
 # Display settings - using wasmcanvas
 display_library: wasmcanvas
 
 # Keyboard and mouse
-keyboard: serial_delay=200
-mouse: enabled=1, type=ps2
+keyboard_type: mf, serial_delay=200
+mouse: enabled=0
 
 # ATA controller configuration
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
@@ -28,5 +30,5 @@ ata0-master: type=disk, mode=flat, path=/pack/hdd.img, cylinders=8322, heads=16,
 # CD-ROM on ata0-slave
 ata0-slave: type=cdrom, path=/pack/boot.iso, status=inserted
 
-# Boot sequence
-boot: disk, cdrom
+# Boot order
+boot: cdrom
