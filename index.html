@@ -100,7 +100,7 @@ const container = document.getElementById('container');
 const ctx = canvas.getContext('2d');
 
 const DOM_TO_BX_KEY = {
-  "Escape": 0x01, "Digit1": 0x02, "Digit2": 0x03, "Digit3": 0x04, "Digit4": 0x05, "Digit5": 0x06,
+  "Escape": 0x01, "Digit1": 0x02, "Digit2": 0x03, "Digit4": 0x05, "Digit5": 0x06,
   "Digit6": 0x07, "Digit7": 0x08, "Digit8": 0x09, "Digit9": 0x0a, "Digit0": 0x0b, "Minus": 0x0c,
   "Equal": 0x0d, "Backspace": 0x0e, "Tab": 0x0f, "KeyQ": 0x10, "KeyW": 0x11, "KeyE": 0x12,
   "KeyR": 0x13, "KeyT": 0x14, "KeyY": 0x15, "KeyU": 0x16, "KeyI": 0x17, "KeyO": 0x18,
@@ -225,7 +225,7 @@ function createTestHddImage() {
   return buffer;
 }
 
-async function boot(isoBuffer) {
+async function boot(isoFileOrBlob, bootOrder = 'cdrom') {
   statusDiv.innerText = 'Status: Fetching BIOS & ROMs...';
   const biosRes = await fetch('BIOS-bochs-latest');
   const biosBytes = await biosRes.arrayBuffer();
@@ -234,20 +234,25 @@ async function boot(isoBuffer) {
   const vgabiosBytes = await vgabiosRes.arrayBuffer();
 
   const hddBytes = createTestHddImage();
+  const ramMegs = document.getElementById('ram-select').value;
 
   statusDiv.innerText = 'Status: Emulator Running';
+
+  // Send File or Blob directly to worker for WORKERFS mounting
   worker.postMessage({
     type: 'init',
-    isoBytes: isoBuffer,
+    isoFile: isoFileOrBlob,
     hddBytes: hddBytes,
     biosBytes: biosBytes,
-    vgabiosBytes: vgabiosBytes
+    vgabiosBytes: vgabiosBytes,
+    ramMegs: ramMegs,
+    bootOrder: bootOrder
   });
 }
 
 document.getElementById('btn-test').addEventListener('click', () => {
-  const dummyIso = new Uint8Array(10 * 1024 * 1024).buffer;
-  boot(dummyIso);
+  const dummyIsoBlob = new Blob([new Uint8Array(2048)]);
+  boot(dummyIsoBlob, 'disk, cdrom');
 });
 
 document.getElementById('btn-iso').addEventListener('click', () => {
@@ -257,11 +262,7 @@ document.getElementById('btn-iso').addEventListener('click', () => {
 document.getElementById('file-iso').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (file) {
-    const reader = new FileReader();
-    reader.onload = function() {
-      boot(reader.result);
-    };
-    reader.readAsArrayBuffer(file);
+    boot(file, 'cdrom');
   }
 });
 </script>
