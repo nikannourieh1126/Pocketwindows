@@ -39,6 +39,8 @@ public:
   virtual void draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
                          Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
                          bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs, bool font2);
+  virtual bx_svga_tileinfo_t *graphics_tile_info(bx_svga_tileinfo_t *info);
+  virtual void graphics_tile_update_in_place(unsigned x0, unsigned y0, unsigned w, unsigned h);
 };
 
 static bx_wasmcanvas_gui_c *theGui = NULL;
@@ -52,6 +54,25 @@ static unsigned headerbar_height = 0;
 static Bit32u wasm_palette[256];
 static bool frame_dirty = false;
 static bool mic_active = false;
+
+static unsigned dirty_min_x = 0, dirty_min_y = 0;
+static unsigned dirty_max_x = 0, dirty_max_y = 0;
+
+static void mark_dirty_rect(unsigned x, unsigned y, unsigned w, unsigned h)
+{
+  if (!frame_dirty) {
+    dirty_min_x = x;
+    dirty_min_y = y;
+    dirty_max_x = x + w;
+    dirty_max_y = y + h;
+    frame_dirty = true;
+  } else {
+    if (x < dirty_min_x) dirty_min_x = x;
+    if (y < dirty_min_y) dirty_min_y = y;
+    if (x + w > dirty_max_x) dirty_max_x = x + w;
+    if (y + h > dirty_max_y) dirty_max_y = y + h;
+  }
+}
 
 extern "C" {
   EMSCRIPTEN_KEEPALIVE
@@ -104,12 +125,13 @@ void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned headerba
   put("WASMCANVAS");
   headerbar_height = headerbar_y;
   new_text_api = 1;
+  host_bpp = 32;
 
   framebuffer = (Bit8u*)malloc(res_x * res_y * 4);
   if (framebuffer) {
     memset(framebuffer, 0, res_x * res_y * 4);
   }
-  frame_dirty = true;
+  mark_dirty_rect(0, 0, res_x, res_y);
 
   EM_ASM({
     if (Module.onDimensionChange) {
@@ -129,13 +151,23 @@ void bx_wasmcanvas_gui_c::flush(void)
 {
   if (!framebuffer || !frame_dirty) return;
 
+  if (dirty_max_x > res_x) dirty_max_x = res_x;
+  if (dirty_max_y > res_y) dirty_max_y = res_y;
+  if (dirty_min_x >= dirty_max_x || dirty_min_y >= dirty_max_y) {
+    dirty_min_x = 0; dirty_min_y = 0;
+    dirty_max_x = res_x; dirty_max_y = res_y;
+  }
+
+  unsigned dw = dirty_max_x - dirty_min_x;
+  unsigned dh = dirty_max_y - dirty_min_y;
+
   EM_ASM({
     if (Module.onFrame) {
       var fbBytes = $1 * $2 * 4;
       var fbData = Module.HEAPU8.subarray($0, $0 + fbBytes);
-      Module.onFrame(fbData, $1, $2);
+      Module.onFrame(fbData, $1, $2, $3, $4, $5, $6);
     }
-  }, (unsigned)framebuffer, res_x, res_y);
+  }, (unsigned)framebuffer, res_x, res_y, dirty_min_x, dirty_min_y, dw, dh);
 
   frame_dirty = false;
 }
@@ -144,7 +176,7 @@ void bx_wasmcanvas_gui_c::clear_screen(void)
 {
   if (framebuffer) {
     memset(framebuffer, 0, res_x * res_y * 4);
-    frame_dirty = true;
+    mark_dirty_rect(0, 0, res_x, res_y);
   }
 }
 
@@ -182,7 +214,7 @@ void bx_wasmcanvas_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit
     }
   }
 
-  frame_dirty = true;
+  mark_dirty_rect(xc, yc, fw, fh);
 }
 
 void bx_wasmcanvas_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
@@ -208,8 +240,39 @@ bool bx_wasmcanvas_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bi
 {
   // Set fully opaque RGBA 32-bit pixel value for HTML5 Canvas (little endian: A, B, G, R)
   wasm_palette[index] = 0xFF000000 | (blue << 16) | (green << 8) | red;
-  frame_dirty = true;
+  mark_dirty_rect(0, 0, res_x, res_y);
   return 0;
+}
+
+bx_svga_tileinfo_t *bx_wasmcanvas_gui_c::graphics_tile_info(bx_svga_tileinfo_t *info)
+{
+  if (!info) {
+    info = new bx_svga_tileinfo_t;
+    if (!info) return NULL;
+  }
+  info->bpp = 32;
+  info->pitch = res_x * 4;
+  info->red_shift = 0;
+  info->green_shift = 8;
+  info->blue_shift = 16;
+  info->red_mask = 0x000000ff;
+  info->green_mask = 0x0000ff00;
+  info->blue_mask = 0x00ff0000;
+  info->is_indexed = 0;
+  info->is_little_endian = 1;
+  return info;
+}
+
+void bx_wasmcanvas_gui_c::graphics_tile_update_in_place(unsigned x0, unsigned y0, unsigned w, unsigned h)
+{
+  if (!framebuffer) return;
+  for (unsigned y = y0; y < y0 + h && y < res_y; y++) {
+    Bit32u *buf = (Bit32u*)framebuffer + y * res_x + x0;
+    for (unsigned x = 0; x < w && (x0 + x) < res_x; x++) {
+      buf[x] |= 0xFF000000;
+    }
+  }
+  mark_dirty_rect(x0, y0, w, h);
 }
 
 void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsigned y)
@@ -279,7 +342,7 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
     default:
       break;
   }
-  frame_dirty = true;
+  mark_dirty_rect(x, y, x_tilesize, y_tilesize);
 }
 
 void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)
@@ -299,7 +362,7 @@ void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fhei
   if (framebuffer) {
     memset(framebuffer, 0, res_x * res_y * 4);
   }
-  frame_dirty = true;
+  mark_dirty_rect(0, 0, res_x, res_y);
 
   EM_ASM({
     if (Module.onDimensionChange) {

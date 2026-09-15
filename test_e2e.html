@@ -26,7 +26,11 @@ worker.onmessage = function(e) {
             canvas.width = msg.width;
             canvas.height = msg.height;
         }
-        ctx.putImageData(msg.imageData, 0, 0);
+        if (msg.dirtyW > 0 && msg.dirtyH > 0) {
+            ctx.putImageData(msg.imageData, 0, 0, msg.dirtyX, msg.dirtyY, msg.dirtyW, msg.dirtyH);
+        } else {
+            ctx.putImageData(msg.imageData, 0, 0);
+        }
         statusDiv.innerText = `Emulator Running: Frame Rendered (${msg.width}x${msg.height})`;
         window.frameRendered = true;
     } else if (msg.type === 'dimension') {

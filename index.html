@@ -143,7 +143,11 @@ worker.onmessage = function(e) {
       canvas.height = msg.height;
       scaleCanvas();
     }
-    ctx.putImageData(msg.imageData, 0, 0);
+    if (msg.dirtyW > 0 && msg.dirtyH > 0) {
+      ctx.putImageData(msg.imageData, 0, 0, msg.dirtyX, msg.dirtyY, msg.dirtyW, msg.dirtyH);
+    } else {
+      ctx.putImageData(msg.imageData, 0, 0);
+    }
     window.frameRendered = true;
     statusDiv.innerText = 'Status: Emulator Running';
   } else if (msg.type === 'dimension') {

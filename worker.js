@@ -130,13 +130,17 @@ boot: ${bootOrder}
     }
 }
 
-function handleFrame(data, width, height) {
+function handleFrame(data, width, height, dx, dy, dw, dh) {
     if (data instanceof ImageData) {
         self.postMessage({
             type: 'frame',
             imageData: data,
             width: data.width,
-            height: data.height
+            height: data.height,
+            dirtyX: dx !== undefined ? dx : 0,
+            dirtyY: dy !== undefined ? dy : 0,
+            dirtyW: dw !== undefined ? dw : data.width,
+            dirtyH: dh !== undefined ? dh : data.height
         });
     } else if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
         const copy = new Uint8ClampedArray(data);
@@ -145,7 +149,11 @@ function handleFrame(data, width, height) {
             type: 'frame',
             imageData: imgData,
             width: width,
-            height: height
+            height: height,
+            dirtyX: dx !== undefined ? dx : 0,
+            dirtyY: dy !== undefined ? dy : 0,
+            dirtyW: dw !== undefined ? dw : width,
+            dirtyH: dh !== undefined ? dh : height
         });
     }
 }
