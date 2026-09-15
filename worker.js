@@ -110,7 +110,7 @@ sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
 display_library: wasmcanvas
 
 keyboard: type=mf, serial_delay=200
-mouse: enabled=0
+mouse: enabled=1, type=ps2
 
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
 ata0-master: type=disk, mode=flat, path=/pack/hdd.img, cylinders=${cylinders}, heads=${heads}, spt=${spt}

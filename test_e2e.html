@@ -61,7 +61,7 @@ async function start() {
         statusDiv.innerText = 'Posting init to Worker...';
         worker.postMessage({
             type: 'init',
-            isoBytes: dummyIso,
+            isoFile: new Blob([dummyIso]),
             hddBytes: dummyHdd,
             biosBytes: biosBytes,
             vgabiosBytes: vgabiosBytes

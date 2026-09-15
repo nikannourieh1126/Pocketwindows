@@ -189,6 +189,8 @@ void bx_wasmcanvas_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
                                       unsigned long cursor_x, unsigned long cursor_y,
                                       bx_vga_tminfo_t *tm_info)
 {
+  Bit16u cursor_address = (Bit16u)(cursor_y * tm_info->line_offset + cursor_x);
+  text_update_common(old_text, new_text, cursor_address, tm_info);
   flush();
 }
 
@@ -283,11 +285,13 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
 void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)
 {
   guest_textmode = (fheight > 0);
-  guest_xres = x;
-  guest_yres = y;
+  guest_fwidth = fwidth;
+  guest_fheight = fheight;
   guest_bpp = bpp;
 
   res_x = x;
+  guest_xres = x;
+  guest_yres = y;
   res_y = y;
 
   if (framebuffer) free(framebuffer);
