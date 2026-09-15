@@ -127,6 +127,9 @@ void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned headerba
   new_text_api = 1;
   host_bpp = 32;
 
+  if (x_tilesize == 0) x_tilesize = 16;
+  if (y_tilesize == 0) y_tilesize = 16;
+
   framebuffer = (Bit8u*)malloc(res_x * res_y * 4);
   if (framebuffer) {
     memset(framebuffer, 0, res_x * res_y * 4);
@@ -279,27 +282,36 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
 {
   if (!framebuffer) return;
 
+  if (x_tilesize == 0) x_tilesize = 16;
+  if (y_tilesize == 0) y_tilesize = 16;
+
   Bit32u *buf = (Bit32u*)framebuffer + y * res_x + x;
   int i = y_tilesize;
   if (i + y > res_y) i = res_y - y;
+  if (i <= 0) return;
+
+  int tile_w = x_tilesize;
+  if (tile_w + x > res_x) tile_w = res_x - x;
+  if (tile_w <= 0) return;
 
   switch (guest_bpp) {
     case 8:
       do {
         Bit32u *buf_row = buf;
-        int j = x_tilesize;
+        int j = tile_w;
         do {
           Bit8u pixel = *snapshot++;
           Bit32u color = wasm_palette[pixel];
           *buf++ = color;
         } while(--j);
+        snapshot += (x_tilesize - tile_w);
         buf = buf_row + res_x;
       } while(--i);
       break;
     case 16:
       do {
         Bit32u *buf_row = buf;
-        int j = x_tilesize;
+        int j = tile_w;
         do {
           Bit16u pixel = *(Bit16u*)snapshot;
           snapshot += 2;
@@ -312,37 +324,40 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
                          ((r << 3) | (r >> 2));
           *buf++ = color;
         } while(--j);
+        snapshot += (x_tilesize - tile_w) * 2;
         buf = buf_row + res_x;
       } while(--i);
       break;
     case 24:
       do {
         Bit32u *buf_row = buf;
-        int j = x_tilesize;
+        int j = tile_w;
         do {
           Bit32u color = 0xFF000000 | (snapshot[2] << 16) | (snapshot[1] << 8) | snapshot[0];
           snapshot += 3;
           *buf++ = color;
         } while(--j);
+        snapshot += (x_tilesize - tile_w) * 3;
         buf = buf_row + res_x;
       } while(--i);
       break;
     case 32:
       do {
         Bit32u *buf_row = buf;
-        int j = x_tilesize;
+        int j = tile_w;
         do {
           Bit32u color = 0xFF000000 | (snapshot[2] << 16) | (snapshot[1] << 8) | snapshot[0];
           snapshot += 4;
           *buf++ = color;
         } while(--j);
+        snapshot += (x_tilesize - tile_w) * 4;
         buf = buf_row + res_x;
       } while(--i);
       break;
     default:
       break;
   }
-  mark_dirty_rect(x, y, x_tilesize, y_tilesize);
+  mark_dirty_rect(x, y, tile_w, y_tilesize - i + (y_tilesize - (y_tilesize - i)));
 }
 
 void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)
