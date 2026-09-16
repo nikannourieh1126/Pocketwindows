@@ -8,14 +8,14 @@ self.onmessage = function(e) {
     const msg = e.data;
     
     if (msg.type === 'init') {
-        console.log('[Worker] Received init message with WORKERFS file object');
+        console.log('[Worker] Received init message with payload files');
 
-        const isoFile = msg.isoFile;
+        const isoFile = msg.isoFile || msg.isoBytes;
         const hddBytes = msg.hddBytes;
         const biosBytes = msg.biosBytes;
         const vgabiosBytes = msg.vgabiosBytes;
         const ramMegs = msg.ramMegs || 512;
-        const bootOrder = msg.bootOrder || 'cdrom';
+        const bootOrder = msg.bootOrder || 'disk, cdrom';
         
         if (!isoFile || !hddBytes || !biosBytes || !vgabiosBytes) {
             console.error('[Worker] Missing binary payload files for initialization!');
@@ -51,7 +51,7 @@ self.onmessage = function(e) {
 };
 
 async function startBochs(isoFile, hddBytes, biosBytes, vgabiosBytes, ramMegs, bootOrder) {
-    console.log(`[Worker] Starting Bochs using WORKERFS zero-copy streaming (ISO size: ${isoFile.size} bytes)...`);
+    console.log('[Worker] Starting Bochs with mounted files...');
     
     try {
         importScripts('./bochs.js');
@@ -77,24 +77,26 @@ async function startBochs(isoFile, hddBytes, biosBytes, vgabiosBytes, ramMegs, b
         const hddArray = new Uint8Array(hddBytes);
         FS.writeFile('/pack/hdd.img', hddArray);
         
-        // Mount ISO directly via WORKERFS - zero-copy, lazy sector reading from File/Blob!
-        FS.mkdir('/cdrom_mount');
-        FS.mount(FS.filesystems.WORKERFS, {
-            blobs: [{ name: 'boot.iso', data: isoFile }]
-        }, '/cdrom_mount');
+        if (isoFile instanceof Blob || (typeof File !== 'undefined' && isoFile instanceof File)) {
+            FS.mkdir('/cdrom_mount');
+            FS.mount(FS.filesystems.WORKERFS, {
+                blobs: [{ name: 'boot.iso', data: isoFile }]
+            }, '/cdrom_mount');
+            console.log('[Worker] WORKERFS mounted CD-ROM');
+        } else if (isoFile instanceof ArrayBuffer || ArrayBuffer.isView(isoFile)) {
+            FS.writeFile('/pack/boot.iso', new Uint8Array(isoFile));
+            console.log('[Worker] Wrote CD-ROM buffer to /pack/boot.iso');
+        }
 
-        console.log(`[Worker] WORKERFS successfully mounted CD-ROM at /cdrom_mount/boot.iso (File Size: ${isoFile.size} bytes)`);
-
-        // Dynamically compute cylinders based on hard disk image size
         const heads = 16;
         const spt = 63;
         const bytesPerSector = 512;
         const cylinders = Math.max(1, Math.floor(hddArray.byteLength / (heads * spt * bytesPerSector)));
 
-        console.log(`[Worker] Dynamic HDD CHS Geometry: cylinders=${cylinders}, heads=${heads}, spt=${spt} (size: ${hddArray.byteLength} bytes)`);
+        const cdromPath = (isoFile instanceof Blob || (typeof File !== 'undefined' && isoFile instanceof File)) ? '/cdrom_mount/boot.iso' : '/pack/boot.iso';
 
         const bochsrc = `
-# Bochs WASM Configuration - Optimized Execution Engine with SB16 Audio & WORKERFS
+# Bochs WASM Configuration
 cpu: count=1, ips=15000000, reset_on_triple_fault=1, ignore_bad_msrs=1
 clock: sync=none, time0=local
 megs: ${ramMegs}
@@ -105,8 +107,6 @@ vgaromimage: file=/pack/VGABIOS-lgpl-latest
 pci: enabled=1, chipset=i440fx
 vga: extension=vbe, update_freq=60
 
-sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
-
 display_library: wasmcanvas
 
 keyboard: type=mf, serial_delay=200
@@ -114,7 +114,7 @@ mouse: enabled=1, type=ps2
 
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
 ata0-master: type=disk, mode=flat, path=/pack/hdd.img, cylinders=${cylinders}, heads=${heads}, spt=${spt}
-ata0-slave: type=cdrom, path=/cdrom_mount/boot.iso, status=inserted
+ata0-slave: type=cdrom, path=${cdromPath}, status=inserted
 
 boot: ${bootOrder}
 `;

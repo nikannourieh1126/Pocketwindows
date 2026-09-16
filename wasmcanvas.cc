@@ -28,6 +28,7 @@
 #include "iodev.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <emscripten/emscripten.h>
 
 #include "icon_bochs.h"
@@ -36,15 +37,28 @@ class bx_wasmcanvas_gui_c : public bx_gui_c {
 public:
   bx_wasmcanvas_gui_c();
   DECLARE_GUI_VIRTUAL_METHODS()
+  DECLARE_GUI_NEW_VIRTUAL_METHODS()
   virtual void draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
                          Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
                          bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs, bool font2);
-  virtual bx_svga_tileinfo_t *graphics_tile_info(bx_svga_tileinfo_t *info);
-  virtual void graphics_tile_update_in_place(unsigned x0, unsigned y0, unsigned w, unsigned h);
 };
 
 static bx_wasmcanvas_gui_c *theGui = NULL;
-IMPLEMENT_GUI_PLUGIN_CODE(wasmcanvas)
+
+PLUGIN_ENTRY_FOR_GUI_MODULE(wasmcanvas)
+{
+  if (mode == PLUGIN_INIT) {
+    genlog->info("installing wasmcanvas module as the Bochs GUI");
+    theGui = new bx_wasmcanvas_gui_c ();
+    bx_gui = theGui;
+  } else if (mode == PLUGIN_FINI) {
+    delete theGui;
+    bx_gui = NULL;
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_GUI;
+  }
+  return 0;
+}
 
 #define LOG_THIS theGui->
 
@@ -99,7 +113,6 @@ extern "C" {
 
   EMSCRIPTEN_KEEPALIVE
   void bx_wasm_mic_input(Bit8u *pcm_data, int len) {
-    // Process input PCM audio stream into guest sound device
     if (!pcm_data || len <= 0) return;
   }
 
@@ -244,7 +257,6 @@ int bx_wasmcanvas_gui_c::set_clipboard_text(char *text_snapshot, Bit32u len)
 
 bool bx_wasmcanvas_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
 {
-  // Set fully opaque RGBA 32-bit pixel value for HTML5 Canvas (little endian: A, B, G, R)
   wasm_palette[index] = 0xFF000000 | (blue << 16) | (green << 8) | red;
   mark_dirty_rect(0, 0, res_x, res_y);
   return 0;
@@ -267,6 +279,21 @@ bx_svga_tileinfo_t *bx_wasmcanvas_gui_c::graphics_tile_info(bx_svga_tileinfo_t *
   info->is_indexed = 0;
   info->is_little_endian = 1;
   return info;
+}
+
+Bit8u *bx_wasmcanvas_gui_c::graphics_tile_get(unsigned x0, unsigned y0, unsigned *w, unsigned *h)
+{
+  if (x_tilesize == 0) x_tilesize = 16;
+  if (y_tilesize == 0) y_tilesize = 16;
+
+  if (x0 + x_tilesize > res_x) *w = (x0 < res_x) ? (res_x - x0) : 0;
+  else *w = x_tilesize;
+
+  if (y0 + y_tilesize > res_y) *h = (y0 < res_y) ? (res_y - y0) : 0;
+  else *h = y_tilesize;
+
+  if (!framebuffer) return NULL;
+  return framebuffer + y0 * (res_x * 4) + x0 * 4;
 }
 
 void bx_wasmcanvas_gui_c::graphics_tile_update_in_place(unsigned x0, unsigned y0, unsigned w, unsigned h)

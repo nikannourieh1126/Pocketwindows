@@ -1,37 +1,39 @@
 # Bochs WASM Configuration File
-# Optimized for maximum speed, lightweight footprint, and full audio/microphone/mouse support
+# Custom config for Pocket Windows with hard disk and CD-ROM
 
 # CPU and memory settings
-cpu: count=1, ips=15000000, reset_on_triple_fault=1, ignore_bad_msrs=1
-clock: sync=none, time0=local
+cpu: count=1, cores=1, threads=1, reset_on_triple_fault=1, ignore_bad_msrs=1
 megs: 512
 
-# ROM images
+# ROM images - paths will be set by JS before starting
 romimage: file=/pack/BIOS-bochs-latest, options=fastboot
 vgaromimage: file=/pack/VGABIOS-lgpl-latest
 
-# PCI and VGA settings
-pci: enabled=1, chipset=i440fx
-vga: extension=vbe, update_freq=60
-
-# Sound Blaster 16 Audio Output & Microphone Emulation
-sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
-
-# Display settings - using wasmcanvas
+# Display settings - using wasmcanvas (no X11, no SDL)
 display_library: wasmcanvas
 
 # Keyboard and mouse
-keyboard: type=mf, serial_delay=200
-mouse: enabled=1, type=ps2
+keyboard_type: mf, serial_delay=200
+mouse: enabled=0
 
 # ATA controller configuration
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
 
-# Hard disk on ata0-master
+# Hard disk on ata0-master (will be created by worker.js)
+# cylinders computed for ~4GB: 4096MB = 4294967296 bytes
+# cylinders = 4294967296 / (16 * 63 * 512) = 8322
 ata0-master: type=disk, mode=flat, path=/pack/hdd.img, cylinders=8322, heads=16, spt=63
 
-# CD-ROM on ata0-slave
+# CD-ROM on ata0-slave (Windows XP ISO)
 ata0-slave: type=cdrom, path=/pack/boot.iso, status=inserted
 
-# Boot order
+# Boot from CD-ROM first (for Windows Setup)
 boot: cdrom
+
+# Optional: Enable logging
+# log: bochs.log
+# panic: action=ask
+# error: action=report
+# info: action=report
+# debug: action=ignore
+# gui_debug: action=ignore

@@ -264,7 +264,6 @@ async function boot(isoFileOrBlob, bootOrder = 'cdrom') {
 
   statusDiv.innerText = 'Status: Emulator Running';
 
-  // Send File or Blob directly to worker for WORKERFS mounting
   worker.postMessage({
     type: 'init',
     isoFile: isoFileOrBlob,
