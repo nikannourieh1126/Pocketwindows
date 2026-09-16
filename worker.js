@@ -1,128 +1,147 @@
 // Pocket Windows - Bochs WASM Worker
-// Runs Bochs x86-64 emulator in a Web Worker (single-threaded, using WORKERFS zero-copy file streaming)
+// Runs Bochs x86-64 emulator in a Web Worker (single-threaded, no SharedArrayBuffer)
 
 let bochsModule = null;
+let canvas = null;
+let ctx = null;
+let animationId = null;
+
+// Hard disk configuration
+const HDD_SIZE_MB = 2048; // Default to 2GB to avoid browser memory issues
+const HDD_SIZE_BYTES = HDD_SIZE_MB * 1024 * 1024;
+const HDD_CYLINDERS = Math.floor(HDD_SIZE_BYTES / (16 * 63 * 512));
+const HDD_HEADS = 16;
+const HDD_SPT = 63;
+
+console.log(`[Worker] HDD Configuration: ${HDD_SIZE_MB}MB, cylinders=${HDD_CYLINDERS}, heads=${HDD_HEADS}, spt=${HDD_SPT}`);
 
 // Handle messages from main thread
 self.onmessage = function(e) {
     const msg = e.data;
     
     if (msg.type === 'init') {
-        console.log('[Worker] Received init message with WORKERFS file object');
+        // Initialize with transferred ISO, HDD, BIOS and VGABIOS data
+        console.log('[Worker] Received init message');
 
-        const isoFile = msg.isoFile;
+        const isoBytes = msg.isoBytes;
         const hddBytes = msg.hddBytes;
         const biosBytes = msg.biosBytes;
         const vgabiosBytes = msg.vgabiosBytes;
-        const ramMegs = msg.ramMegs || 512;
-        const bootOrder = msg.bootOrder || 'cdrom';
         
-        if (!isoFile || !hddBytes || !biosBytes || !vgabiosBytes) {
-            console.error('[Worker] Missing binary payload files for initialization!');
+        if (!isoBytes) {
+            console.error('[Worker] No ISO bytes received!');
             return;
         }
 
-        startBochs(isoFile, hddBytes, biosBytes, vgabiosBytes, ramMegs, bootOrder);
+        if (!hddBytes) {
+            console.error('[Worker] No HDD bytes received!');
+            return;
+        }
+
+        if (!biosBytes || !vgabiosBytes) {
+            console.error('[Worker] Missing biosBytes/vgabiosBytes! Bochs cannot start without them.');
+            return;
+        }
+
+        console.log(`[Worker] ISO size: ${isoBytes.byteLength} bytes`);
+        console.log(`[Worker] HDD size: ${hddBytes.byteLength} bytes`);
+        console.log(`[Worker] BIOS size: ${biosBytes.byteLength} bytes`);
+        console.log(`[Worker] VGABIOS size: ${vgabiosBytes.byteLength} bytes`);
+
+        // Start Bochs with the images
+        startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes);
     } else if (msg.type === 'keydown') {
-        const key = msg.scancode !== undefined ? msg.scancode : msg.key;
-        if (bochsModule && bochsModule._bx_wasm_key_event && key !== undefined) {
-            bochsModule._bx_wasm_key_event(key, true);
+        if (bochsModule && bochsModule.onKeyDown) {
+            bochsModule.onKeyDown(msg.keyCode, msg.scancode);
         }
     } else if (msg.type === 'keyup') {
-        const key = msg.scancode !== undefined ? msg.scancode : msg.key;
-        if (bochsModule && bochsModule._bx_wasm_key_event && key !== undefined) {
-            bochsModule._bx_wasm_key_event(key, false);
+        if (bochsModule && bochsModule.onKeyUp) {
+            bochsModule.onKeyUp(msg.keyCode, msg.scancode);
         }
-    } else if (msg.type === 'mouse' || msg.type === 'mousemove') {
-        const dx = msg.x !== undefined ? msg.x : (msg.deltaX || 0);
-        const dy = msg.y !== undefined ? msg.y : (msg.deltaY || 0);
-        const btns = msg.buttonState !== undefined ? msg.buttonState : (msg.buttons || 0);
-        if (bochsModule && bochsModule._bx_wasm_mouse_event) {
-            bochsModule._bx_wasm_mouse_event(dx, dy, btns);
+    } else if (msg.type === 'mousemove') {
+        if (bochsModule && bochsModule.onMouseMove) {
+            bochsModule.onMouseMove(msg.x, msg.y, msg.buttons);
         }
-    } else if (msg.type === 'mic_data') {
-        if (bochsModule && bochsModule._bx_wasm_mic_input && msg.pcmData) {
-            const ptr = bochsModule._malloc(msg.pcmData.byteLength);
-            bochsModule.HEAPU8.set(new Uint8Array(msg.pcmData), ptr);
-            bochsModule._bx_wasm_mic_input(ptr, msg.pcmData.byteLength);
-            bochsModule._free(ptr);
+    } else if (msg.type === 'mousedown') {
+        if (bochsModule && bochsModule.onMouseDown) {
+            bochsModule.onMouseDown(msg.button);
+        }
+    } else if (msg.type === 'mouseup') {
+        if (bochsModule && bochsModule.onMouseUp) {
+            bochsModule.onMouseUp(msg.button);
         }
     }
 };
 
-async function startBochs(isoFile, hddBytes, biosBytes, vgabiosBytes, ramMegs, bootOrder) {
-    console.log(`[Worker] Starting Bochs using WORKERFS zero-copy streaming (ISO size: ${isoFile.size} bytes)...`);
+async function startBochs(isoBytes, hddBytes, biosBytes, vgabiosBytes) {
+    console.log('[Worker] Starting Bochs...');
     
     try {
+        // Import the Bochs module
         importScripts('./bochs.js');
         
+        // Create Bochs module instance
         bochsModule = await createBochsModule({
-            noInitialRun: true,
             onFrame: handleFrame,
             onDimensionChange: handleDimensionChange,
-            onAudioOutput: handleAudioOutput,
-            onRequestMic: handleRequestMic,
             print: handlePrint,
             printErr: handlePrintErr
         });
         
         console.log('[Worker] Bochs module created');
         
+        // Set up virtual filesystem
         const FS = bochsModule.FS;
+
+        // Create /pack directory
         FS.mkdir('/pack');
 
+        // Write BIOS and VGABIOS files (required — bochsrc references them by these exact names)
+        console.log('[Worker] Writing BIOS-bochs-latest...');
         FS.writeFile('/pack/BIOS-bochs-latest', new Uint8Array(biosBytes));
+        console.log('[Worker] Writing VGABIOS-lgpl-latest...');
         FS.writeFile('/pack/VGABIOS-lgpl-latest', new Uint8Array(vgabiosBytes));
         
+        // Write the hard disk image
+        console.log('[Worker] Writing HDD image to /pack/hdd.img...');
         const hddArray = new Uint8Array(hddBytes);
         FS.writeFile('/pack/hdd.img', hddArray);
+        console.log(`[Worker] HDD image written: ${hddArray.length} bytes`);
         
-        // Mount ISO directly via WORKERFS - zero-copy, lazy sector reading from File/Blob!
-        FS.mkdir('/cdrom_mount');
-        FS.mount(FS.filesystems.WORKERFS, {
-            blobs: [{ name: 'boot.iso', data: isoFile }]
-        }, '/cdrom_mount');
+        // Write the ISO image
+        console.log('[Worker] Writing ISO image to /pack/boot.iso...');
+        const isoArray = new Uint8Array(isoBytes);
+        FS.writeFile('/pack/boot.iso', isoArray);
+        console.log(`[Worker] ISO image written: ${isoArray.length} bytes`);
 
-        console.log(`[Worker] WORKERFS successfully mounted CD-ROM at /cdrom_mount/boot.iso (File Size: ${isoFile.size} bytes)`);
-
-        // Dynamically compute cylinders based on hard disk image size
-        const heads = 16;
-        const spt = 63;
-        const bytesPerSector = 512;
-        const cylinders = Math.max(1, Math.floor(hddArray.byteLength / (heads * spt * bytesPerSector)));
-
-        console.log(`[Worker] Dynamic HDD CHS Geometry: cylinders=${cylinders}, heads=${heads}, spt=${spt} (size: ${hddArray.byteLength} bytes)`);
-
+        // Create bochsrc configuration
         const bochsrc = `
-# Bochs WASM Configuration - Optimized Execution Engine with SB16 Audio & WORKERFS
-cpu: count=1, ips=15000000, reset_on_triple_fault=1, ignore_bad_msrs=1
-clock: sync=none, time0=local
-megs: ${ramMegs}
+# Bochs WASM Configuration
+cpu: count=1, cores=1, threads=1, reset_on_triple_fault=1, ignore_bad_msrs=1
+megs: 512
 
 romimage: file=/pack/BIOS-bochs-latest, options=fastboot
 vgaromimage: file=/pack/VGABIOS-lgpl-latest
 
-pci: enabled=1, chipset=i440fx
-vga: extension=vbe, update_freq=60
-
-sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
-
 display_library: wasmcanvas
 
-keyboard: type=mf, serial_delay=200
-mouse: enabled=1, type=ps2
+keyboard_type: mf, serial_delay=200
+mouse: enabled=0
 
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
-ata0-master: type=disk, mode=flat, path=/pack/hdd.img, cylinders=${cylinders}, heads=${heads}, spt=${spt}
-ata0-slave: type=cdrom, path=/cdrom_mount/boot.iso, status=inserted
+ata0-master: type=disk, mode=flat, path=/pack/hdd.img, cylinders=${HDD_CYLINDERS}, heads=${HDD_HEADS}, spt=${HDD_SPT}
+ata0-slave: type=cdrom, path=/pack/boot.iso, status=inserted
 
-boot: ${bootOrder}
+boot: cdrom
 `;
         
         FS.writeFile('/pack/bochsrc.txt', new TextEncoder().encode(bochsrc));
         console.log('[Worker] Bochsrc written');
 
+        // Start Bochs with our config
+        console.log('[Worker] Calling callMain with bochsrc...');
         bochsModule.callMain(['-f', '/pack/bochsrc.txt', '-q']);
+        console.log('[Worker] callMain returned');
         
     } catch (err) {
         console.error('[Worker] Error starting Bochs:', err);
@@ -130,49 +149,14 @@ boot: ${bootOrder}
     }
 }
 
-function handleFrame(data, width, height, dx, dy, dw, dh) {
-    if (data instanceof ImageData) {
-        self.postMessage({
-            type: 'frame',
-            imageData: data,
-            width: data.width,
-            height: data.height,
-            dirtyX: dx !== undefined ? dx : 0,
-            dirtyY: dy !== undefined ? dy : 0,
-            dirtyW: dw !== undefined ? dw : data.width,
-            dirtyH: dh !== undefined ? dh : data.height
-        }, [data.data.buffer]);
-    } else if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
-        const copy = new Uint8ClampedArray(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
-        const imgData = new ImageData(copy, width, height);
-        self.postMessage({
-            type: 'frame',
-            imageData: imgData,
-            width: width,
-            height: height,
-            dirtyX: dx !== undefined ? dx : 0,
-            dirtyY: dy !== undefined ? dy : 0,
-            dirtyW: dw !== undefined ? dw : width,
-            dirtyH: dh !== undefined ? dh : height
-        }, [copy.buffer]);
-    }
-}
-
-function handleAudioOutput(pcmBytes) {
-    if (!pcmBytes) return;
-    const copy = new Uint8Array(pcmBytes);
+function handleFrame(imageData) {
+    // Send frame data to main thread
     self.postMessage({
-        type: 'audio',
-        samples: copy.buffer
-    }, [copy.buffer]);
-}
-
-function handleRequestMic(enable) {
-    console.log(`[Worker] Guest requested microphone: ${enable}`);
-    self.postMessage({
-        type: 'request_mic',
-        enable: enable
-    });
+        type: 'frame',
+        imageData: imageData,
+        width: imageData.width,
+        height: imageData.height
+    }, [imageData.data.buffer]);
 }
 
 function handleDimensionChange(width, height) {
@@ -190,11 +174,6 @@ function handlePrint(text) {
 }
 
 function handlePrintErr(text) {
-    if (text && (text.includes('i[') || text.includes('d[') || text.includes('[BIOS]') || text.includes('[VBIOS]') || text.includes('[BXVGA]'))) {
-        console.log('[Bochs]', text);
-        self.postMessage({ type: 'log', text: text, level: 'info' });
-    } else {
-        console.error('[Bochs]', text);
-        self.postMessage({ type: 'log', text: text, level: 'error' });
-    }
+    console.error('[Bochs]', text);
+    self.postMessage({ type: 'log', text: text, level: 'error' });
 }
