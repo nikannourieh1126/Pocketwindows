@@ -283,8 +283,8 @@ bx_svga_tileinfo_t *bx_wasmcanvas_gui_c::graphics_tile_info(bx_svga_tileinfo_t *
 
 Bit8u *bx_wasmcanvas_gui_c::graphics_tile_get(unsigned x0, unsigned y0, unsigned *w, unsigned *h)
 {
-  if (x_tilesize == 0) x_tilesize = 16;
-  if (y_tilesize == 0) y_tilesize = 16;
+  x_tilesize = 16;
+  y_tilesize = 24;
 
   if (x0 + x_tilesize > res_x) *w = (x0 < res_x) ? (res_x - x0) : 0;
   else *w = x_tilesize;
