@@ -126,6 +126,9 @@ void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned headerba
   headerbar_height = headerbar_y;
   new_text_api = 1;
   host_bpp = 32;
+  host_xres = res_x;
+  host_yres = res_y;
+  host_pitch = res_x * 4;
 
   if (x_tilesize == 0) x_tilesize = 16;
   if (y_tilesize == 0) y_tilesize = 16;
@@ -140,7 +143,7 @@ void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned headerba
     if (Module.onDimensionChange) {
       Module.onDimensionChange($0, $1);
     }
-  }, res_x, res_y + headerbar_height);
+  }, res_x, res_y);
 }
 
 void bx_wasmcanvas_gui_c::handle_events(void)
@@ -368,9 +371,15 @@ void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fhei
   guest_bpp = bpp;
 
   res_x = x;
+  host_xres = x;
   guest_xres = x;
-  guest_yres = y;
+
   res_y = y;
+  host_yres = y;
+  guest_yres = y;
+
+  host_pitch = res_x * 4;
+  host_bpp = 32;
 
   if (framebuffer) free(framebuffer);
   framebuffer = (Bit8u*)malloc(res_x * res_y * 4);
@@ -383,7 +392,7 @@ void bx_wasmcanvas_gui_c::dimension_update(unsigned x, unsigned y, unsigned fhei
     if (Module.onDimensionChange) {
       Module.onDimensionChange($0, $1);
     }
-  }, res_x, res_y + headerbar_height);
+  }, res_x, res_y);
 }
 
 unsigned bx_wasmcanvas_gui_c::create_bitmap(const unsigned char *bmap, unsigned xdim, unsigned ydim)

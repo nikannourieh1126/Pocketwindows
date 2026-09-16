@@ -190,6 +190,11 @@ function handlePrint(text) {
 }
 
 function handlePrintErr(text) {
-    console.error('[Bochs]', text);
-    self.postMessage({ type: 'log', text: text, level: 'error' });
+    if (text && (text.includes('i[') || text.includes('d[') || text.includes('[BIOS]') || text.includes('[VBIOS]') || text.includes('[BXVGA]'))) {
+        console.log('[Bochs]', text);
+        self.postMessage({ type: 'log', text: text, level: 'info' });
+    } else {
+        console.error('[Bochs]', text);
+        self.postMessage({ type: 'log', text: text, level: 'error' });
+    }
 }
