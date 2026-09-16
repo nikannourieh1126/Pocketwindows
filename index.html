@@ -136,6 +136,7 @@ function initAudio() {
 }
 
 worker.onmessage = function(e) {
+  if (!e || !e.data) return;
   const msg = e.data;
   if (msg.type === 'frame') {
     if (canvas.width !== msg.width || canvas.height !== msg.height) {

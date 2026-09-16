@@ -141,9 +141,9 @@ function handleFrame(data, width, height, dx, dy, dw, dh) {
             dirtyY: dy !== undefined ? dy : 0,
             dirtyW: dw !== undefined ? dw : data.width,
             dirtyH: dh !== undefined ? dh : data.height
-        });
+        }, [data.data.buffer]);
     } else if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
-        const copy = new Uint8ClampedArray(data);
+        const copy = new Uint8ClampedArray(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
         const imgData = new ImageData(copy, width, height);
         self.postMessage({
             type: 'frame',
@@ -154,7 +154,7 @@ function handleFrame(data, width, height, dx, dy, dw, dh) {
             dirtyY: dy !== undefined ? dy : 0,
             dirtyW: dw !== undefined ? dw : width,
             dirtyH: dh !== undefined ? dh : height
-        });
+        }, [copy.buffer]);
     }
 }
 
