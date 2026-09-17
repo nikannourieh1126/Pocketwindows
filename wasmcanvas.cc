@@ -144,7 +144,7 @@ void bx_wasmcanvas_gui_c::specific_init(int argc, char **argv, unsigned headerba
   host_pitch = res_x * 4;
 
   if (x_tilesize == 0) x_tilesize = 16;
-  if (y_tilesize == 0) y_tilesize = 16;
+  if (y_tilesize == 0) y_tilesize = 24;
 
   framebuffer = (Bit8u*)malloc(res_x * res_y * 4);
   if (framebuffer) {
@@ -313,7 +313,7 @@ void bx_wasmcanvas_gui_c::graphics_tile_update(Bit8u *snapshot, unsigned x, unsi
   if (!framebuffer) return;
 
   if (x_tilesize == 0) x_tilesize = 16;
-  if (y_tilesize == 0) y_tilesize = 16;
+  if (y_tilesize == 0) y_tilesize = 24;
 
   Bit32u *buf = (Bit32u*)framebuffer + y * res_x + x;
   int i = y_tilesize;

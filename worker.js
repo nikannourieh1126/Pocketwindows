@@ -107,6 +107,8 @@ vgaromimage: file=/pack/VGABIOS-lgpl-latest
 pci: enabled=1, chipset=i440fx
 vga: extension=vbe, update_freq=60
 
+sb16: enabled=1, wavemode=1, dmatimer=200000, log=none
+
 display_library: wasmcanvas
 
 keyboard: type=mf, serial_delay=200
