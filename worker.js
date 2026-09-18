@@ -95,9 +95,18 @@ async function startBochs(isoFile, hddBytes, biosBytes, vgabiosBytes, ramMegs, b
 
         const cdromPath = (isoFile instanceof Blob || (typeof File !== 'undefined' && isoFile instanceof File)) ? '/cdrom_mount/boot.iso' : '/pack/boot.iso';
 
+        // Benchmark host CPU performance to dynamically scale IPS
+        const t0 = performance.now();
+        let accum = 0;
+        for (let i = 0; i < 5000000; i++) { accum += (i ^ (i >> 1)); }
+        const dt = Math.max(performance.now() - t0, 1.0);
+        let calibratedIps = Math.round(15000000 * (15.0 / dt));
+        calibratedIps = Math.max(10000000, Math.min(calibratedIps, 50000000));
+        console.log(`[Worker] Host CPU benchmark: ${dt.toFixed(2)}ms (accum=${accum}), dynamic IPS set to ${calibratedIps}`);
+
         const bochsrc = `
 # Bochs WASM Configuration
-cpu: count=1, ips=15000000, reset_on_triple_fault=1, ignore_bad_msrs=1
+cpu: count=1, ips=${calibratedIps}, reset_on_triple_fault=1, ignore_bad_msrs=1
 clock: sync=none, time0=local
 megs: ${ramMegs}
 

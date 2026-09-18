@@ -99,6 +99,21 @@
 
 <script>
 const sysInfoDiv = document.getElementById('sys-info');
+
+// Auto-detect host hardware & benchmark host CPU speed
+(function detectHardware() {
+  const cores = navigator.hardwareConcurrency || 'Unknown';
+  const t0 = performance.now();
+  let accum = 0;
+  for (let i = 0; i < 5000000; i++) { accum += (i ^ (i >> 1)); }
+  const dt = Math.max(performance.now() - t0, 1.0);
+  let estimatedIps = Math.round(15000000 * (15.0 / dt));
+  estimatedIps = Math.max(10000000, Math.min(estimatedIps, 50000000));
+
+  if (sysInfoDiv) {
+    sysInfoDiv.innerText = `Hardware Auto-Detection: Logical Cores = ${cores} | Benchmark: ${dt.toFixed(1)}ms | Target IPS = ${(estimatedIps / 1e6).toFixed(1)}M`;
+  }
+})();
 const statusDiv = document.getElementById('status');
 const canvas = document.getElementById('screen');
 const container = document.getElementById('container');
