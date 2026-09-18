@@ -141,7 +141,19 @@ boot: ${bootOrder}
     }
 }
 
+let frameCount = 0;
+let lastFpsLog = performance.now();
+
 function handleFrame(data, width, height, dx, dy, dw, dh) {
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsLog >= 5000) {
+        const realFps = (frameCount * 1000) / (now - lastFpsLog);
+        console.log(`[Worker] Real-world rendering rate: ${realFps.toFixed(1)} FPS (${frameCount} frames in ${((now - lastFpsLog) / 1000).toFixed(1)}s)`);
+        frameCount = 0;
+        lastFpsLog = now;
+    }
+
     if (data instanceof ImageData) {
         self.postMessage({
             type: 'frame',

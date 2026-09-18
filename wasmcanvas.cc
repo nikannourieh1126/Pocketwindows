@@ -68,6 +68,7 @@ static unsigned headerbar_height = 0;
 static Bit32u wasm_palette[256];
 static bool frame_dirty = false;
 static bool mic_active = false;
+static double last_flush_time = 0.0;
 
 static unsigned dirty_min_x = 0, dirty_min_y = 0;
 static unsigned dirty_max_x = 0, dirty_max_y = 0;
@@ -169,6 +170,14 @@ void bx_wasmcanvas_gui_c::handle_events(void)
 void bx_wasmcanvas_gui_c::flush(void)
 {
   if (!framebuffer || !frame_dirty) return;
+
+  double now = emscripten_get_now();
+  if (now - last_flush_time < 16.0) {
+    // Throttle frame flush to max 60 real FPS (~16.6ms wall-clock interval)
+    // Dirty rect and frame_dirty remain set to accumulate for next flush
+    return;
+  }
+  last_flush_time = now;
 
   if (dirty_max_x > res_x) dirty_max_x = res_x;
   if (dirty_max_y > res_y) dirty_max_y = res_y;
